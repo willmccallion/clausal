@@ -14,6 +14,7 @@ use crate::internal::reason::Reason;
 use crate::internal::trail::Assignment;
 use crate::internal::watcher::{attach_binary, attach_long, BinaryWatchers, LongWatchers};
 use crate::solver::order_heap::OrderHeap;
+use crate::solver::restart::RestartState;
 use crate::solver::search::analyze::analyze;
 use crate::solver::search::backtrack::backtrack_to;
 use crate::solver::search::propagate::propagate;
@@ -38,6 +39,9 @@ pub(crate) struct SearchScratch {
     pub(crate) heap: OrderHeap,
     pub(crate) activities: Vec<f64>,
     pub(crate) var_inc: f64,
+    pub(crate) restart: RestartState,
+    pub(crate) restarts: u64,
+    pub(crate) conflicts: u64,
 }
 
 impl SearchScratch {
@@ -52,6 +56,9 @@ impl SearchScratch {
             heap: OrderHeap::new(),
             activities: Vec::new(),
             var_inc: 1.0,
+            restart: RestartState::new(),
+            restarts: 0,
+            conflicts: 0,
         }
     }
 
@@ -95,7 +102,9 @@ pub(crate) fn solve_loop(
             if conflict_level.is_ground() {
                 return SearchOutcome::Unsat;
             }
-            let (backjump, _lbd) = analyze(
+            scratch.conflicts = scratch.conflicts.saturating_add(1);
+            let peak_trail_len = assignment.trail().len();
+            let (backjump, lbd) = analyze(
                 arena,
                 assignment,
                 conflict,
@@ -117,6 +126,10 @@ pub(crate) fn solve_loop(
                 scratch.heap.update_bumped(var, &scratch.activities);
             }
             scratch.var_inc /= VAR_DECAY;
+            #[allow(clippy::cast_precision_loss)]
+            scratch
+                .restart
+                .record_conflict(f64::from(lbd), peak_trail_len as f64);
             reinsert_from_trail(assignment, &mut scratch.heap, &scratch.activities, backjump);
             backtrack_to(assignment, backjump);
             install_learned(
@@ -128,6 +141,18 @@ pub(crate) fn solve_loop(
                 &scratch.learned,
                 backjump,
             );
+            #[allow(clippy::cast_precision_loss)]
+            if scratch.restart.should_restart(peak_trail_len as f64) {
+                reinsert_from_trail(
+                    assignment,
+                    &mut scratch.heap,
+                    &scratch.activities,
+                    DecisionLevel::GROUND,
+                );
+                backtrack_to(assignment, DecisionLevel::GROUND);
+                scratch.restart.reset_window();
+                scratch.restarts = scratch.restarts.saturating_add(1);
+            }
         } else if let Some(var) = pick_branching_var(&mut scratch.heap, &scratch.activities, assignment) {
             let lit = if assignment.saved_phase(var) { var.pos() } else { var.neg() };
             assignment.push_decision_level();
@@ -355,6 +380,40 @@ mod tests {
         h.add_unit(v(2).pos());
         h.add_unit(v(3).pos());
         assert_eq!(h.solve(), SearchOutcome::Unsat);
+    }
+
+    #[test]
+    fn hard_instance_fires_restarts() {
+        // Pigeonhole PHP(6, 5): 6 pigeons in 5 holes is UNSAT. The solver
+        // should chew through enough conflicts to trigger at least one
+        // Glucose restart before proving UNSAT.
+        let pigeons = 6u32;
+        let holes = 5u32;
+        let var_of = |p: u32, h: u32| -> Var {
+            let n = (p - 1) * holes + h;
+            v(n)
+        };
+        let num_vars = pigeons * holes;
+        let mut h = Harness::new(num_vars);
+        // Every pigeon goes somewhere.
+        for p in 1..=pigeons {
+            let clause: Vec<Lit> = (1..=holes).map(|hi| var_of(p, hi).pos()).collect();
+            h.add_long(&clause);
+        }
+        // No two pigeons share a hole.
+        for hi in 1..=holes {
+            for p1 in 1..=pigeons {
+                for p2 in (p1 + 1)..=pigeons {
+                    h.add_binary(var_of(p1, hi).neg(), var_of(p2, hi).neg());
+                }
+            }
+        }
+        assert_eq!(h.solve(), SearchOutcome::Unsat);
+        assert!(
+            h.scratch.restarts > 0,
+            "expected at least one restart (conflicts={})",
+            h.scratch.conflicts,
+        );
     }
 
     #[test]

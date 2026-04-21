@@ -1,6 +1,7 @@
 //! [`Solver`]: the incremental CDCL solver entry point.
 
 pub(crate) mod order_heap;
+pub(crate) mod restart;
 pub(crate) mod search;
 
 use alloc::vec::Vec;
