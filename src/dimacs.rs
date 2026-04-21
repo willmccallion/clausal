@@ -157,7 +157,7 @@ impl Writer {
         let mut w = BufWriter::new(sink);
         writeln!(w, "p cnf {} {}", cnf.num_vars(), cnf.num_clauses()).map_err(|_| Error::Io)?;
         for clause in cnf.clauses() {
-            for lit in clause.iter() {
+            for lit in clause {
                 write!(w, "{} ", lit.to_dimacs()).map_err(|_| Error::Io)?;
             }
             writeln!(w, "0").map_err(|_| Error::Io)?;

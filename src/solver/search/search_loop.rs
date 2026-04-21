@@ -128,6 +128,7 @@ enum AssumptionStep {
 /// restarts and chrono backjumps to ground level transparently re-seed
 /// them. `core_out` is cleared on entry and populated on UNSAT under
 /// assumptions. `abort` is polled once per iteration.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub(crate) fn solve_loop<F>(
     arena: &mut ClauseArena,
     assignment: &mut Assignment,
@@ -234,7 +235,7 @@ where
             }
         } else {
             match install_next_assumption(assignment, assumptions) {
-                AssumptionStep::Installed => continue,
+                AssumptionStep::Installed => {}
                 AssumptionStep::Infeasible => {
                     populate_core(assignments_on_trail(assumptions, assignment), core_out);
                     return SearchOutcome::Unsat;
@@ -303,7 +304,7 @@ fn install_learned(
 /// [`CHRONO_LEVEL_GAP`], target `conflict_level - 1`. The asserting literal
 /// is then installed at that higher target level instead of at its true
 /// implication level, trading theoretical optimality for trail stability.
-fn chrono_target(conflict_level: DecisionLevel, backjump: DecisionLevel) -> DecisionLevel {
+const fn chrono_target(conflict_level: DecisionLevel, backjump: DecisionLevel) -> DecisionLevel {
     let c = conflict_level.get();
     let b = backjump.get();
     if c > b.saturating_add(CHRONO_LEVEL_GAP) {
@@ -341,7 +342,7 @@ fn install_next_assumption(
 ) -> AssumptionStep {
     for &lit in assumptions {
         match assignment.value_of(lit) {
-            Value::True => continue,
+            Value::True => {}
             Value::False => return AssumptionStep::Infeasible,
             Value::Unassigned => {
                 assignment.push_decision_level();
@@ -368,7 +369,7 @@ fn assignments_on_trail<'a>(
     assumptions
         .iter()
         .copied()
-        .zip(present.into_iter())
+        .zip(present)
         .filter_map(|(lit, present)| present.then_some(lit))
 }
 

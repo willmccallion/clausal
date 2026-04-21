@@ -8,7 +8,7 @@ fn main() -> clausal::Result<()> {
 
     let path = Path::new("examples/sample.cnf");
     let cnf = Parser::new().parse_file(path)?;
-    let mut solver = Solver::builder().build_from(cnf)?;
+    let mut solver = Solver::builder().build_from(&cnf)?;
 
     match solver.solve()? {
         Solution::Sat(_) => println!("sat"),

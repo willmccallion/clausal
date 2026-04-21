@@ -86,8 +86,8 @@ mod tests {
     #[test]
     fn fresh_instance_does_not_feed_lbd() {
         let g = Glucose::default();
-        assert_eq!(g.fast, 0.0);
-        assert_eq!(g.slow, 0.0);
+        assert!(g.fast.to_bits() == 0.0_f64.to_bits());
+        assert!(g.slow.to_bits() == 0.0_f64.to_bits());
     }
 
     #[test]

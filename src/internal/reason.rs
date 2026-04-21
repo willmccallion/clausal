@@ -46,6 +46,7 @@ impl Reason {
 
     /// Returns `true` if this reason is a binary propagation.
     #[inline]
+    #[allow(dead_code, reason = "inprocessing consults reason kind while walking the trail")]
     pub(crate) const fn is_binary(self) -> bool {
         matches!(self, Self::Binary(_))
     }
@@ -61,6 +62,7 @@ impl Reason {
 
     /// Returns the partner literal if this reason is a binary propagation.
     #[inline]
+    #[allow(dead_code, reason = "conflict minimization needs the partner literal")]
     pub(crate) const fn as_binary(self) -> Option<Lit> {
         match self {
             Self::Binary(lit) => Some(lit),

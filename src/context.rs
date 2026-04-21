@@ -15,6 +15,7 @@ pub struct SearchContext<'s> {
 }
 
 impl<'s> SearchContext<'s> {
+    #[allow(dead_code, reason = "constructed by solver loop once heuristics are dispatched")]
     pub(crate) const fn new(solver: &'s Solver) -> Self {
         Self { solver }
     }
@@ -41,13 +42,14 @@ pub struct FormulaView<'s> {
 }
 
 impl<'s> FormulaView<'s> {
+    #[allow(dead_code, reason = "constructed by solver once preprocessor pipeline runs against the Cnf view")]
     pub(crate) const fn new(solver: &'s Solver) -> Self {
         Self { solver }
     }
 
     /// Returns the number of variables in the formula.
     #[must_use]
-    pub fn num_vars(&self) -> u32 {
+    pub const fn num_vars(&self) -> u32 {
         self.solver.num_vars()
     }
 }
@@ -60,6 +62,7 @@ pub struct ClauseRef<'s> {
 }
 
 impl<'s> ClauseRef<'s> {
+    #[allow(dead_code, reason = "constructed when the solver hands user code a clause view")]
     pub(crate) const fn new(solver: &'s Solver, id: ClauseId) -> Self {
         Self { solver, id }
     }
@@ -72,20 +75,20 @@ impl<'s> ClauseRef<'s> {
 
     /// The literals in the clause.
     #[must_use]
-    pub fn lits(&self) -> &[Lit] {
+    pub const fn lits(&self) -> &[Lit] {
         let _ = self.solver;
         &[]
     }
 
     /// The number of literals in the clause.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.lits().len()
     }
 
     /// Returns `true` if the clause has no literals.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.lits().is_empty()
     }
 

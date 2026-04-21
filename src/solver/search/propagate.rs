@@ -24,16 +24,17 @@ pub(crate) fn propagate(
     arena: &mut ClauseArena,
     assignment: &mut Assignment,
     long_watchers: &mut LongWatchers,
-    bin_watchers: &mut BinaryWatchers,
+    bin_watchers: &BinaryWatchers,
 ) -> Option<Conflict> {
     while let Some(p) = assignment.take_next_to_propagate() {
         // Binary watches: no replacement is ever possible, so a simple
-        // forward scan is enough. We iterate by index because a Unassigned
-        // partner triggers `assign` which may push new literals onto the
-        // trail (but doesn't grow this watch-list slot).
+        // forward scan is enough. Index-based iteration avoids holding an
+        // immutable borrow of the slot across `assign` calls below.
         let bin_len = bin_watchers[p.index()].len();
-        for bi in 0..bin_len {
+        let mut bi = 0usize;
+        while bi < bin_len {
             let partner = bin_watchers[p.index()][bi].partner;
+            bi += 1;
             match assignment.value_of(partner) {
                 Value::True => {}
                 Value::False => return Some(Conflict::Binary([!p, partner])),
@@ -187,7 +188,7 @@ mod tests {
         }
 
         fn run(&mut self) -> Option<Conflict> {
-            propagate(&mut self.arena, &mut self.assignment, &mut self.lw, &mut self.bw)
+            propagate(&mut self.arena, &mut self.assignment, &mut self.lw, &self.bw)
         }
     }
 

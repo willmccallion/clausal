@@ -8,7 +8,7 @@
 //! literal among the remaining lits so that two-watched-literal invariants
 //! hold immediately after the learned clause is installed.
 //!
-//! Minimization uses the MiniSat 2.2 recursive strategy: a 64-bit bitmask
+//! Minimization uses the `MiniSat` 2.2 recursive strategy: a 64-bit bitmask
 //! of decision levels present in the learned clause gates iterative DFS
 //! over each non-asserting literal's implication chain. A literal is
 //! redundant when every ancestor on its reason chain is already in the
@@ -36,7 +36,7 @@ use crate::types::{DecisionLevel, Lit, Var};
 /// If the conflict is at ground level the learned clause is empty, the
 /// backjump level is `GROUND`, and LBD is `0`, signalling UNSAT to the
 /// caller.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub(crate) fn analyze(
     arena: &ClauseArena,
     assignment: &Assignment,
@@ -349,8 +349,8 @@ fn place_second_watch(learned: &mut [Lit], assignment: &Assignment) -> DecisionL
     }
     let mut max_level = assignment.level(learned[1].var());
     let mut max_idx = 1;
-    for i in 2..learned.len() {
-        let lvl = assignment.level(learned[i].var());
+    for (i, lit) in learned.iter().enumerate().skip(2) {
+        let lvl = assignment.level(lit.var());
         if lvl.get() > max_level.get() {
             max_level = lvl;
             max_idx = i;

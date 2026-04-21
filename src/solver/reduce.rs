@@ -53,7 +53,7 @@ impl ReduceState {
     }
 
     /// Advances the schedule after a reduction has fired.
-    pub(crate) fn on_reduced(&mut self) {
+    pub(crate) const fn on_reduced(&mut self) {
         self.reductions = self.reductions.saturating_add(1);
         self.interval = self.interval.saturating_add(REDUCE_GROW);
         self.next_reduce = self.next_reduce.saturating_add(self.interval);
@@ -62,7 +62,7 @@ impl ReduceState {
     /// Returns `true` if, after the most recent reduction, an arena
     /// compaction pass should also run.
     pub(crate) const fn should_compact(&self) -> bool {
-        self.reductions > 0 && self.reductions.is_multiple_of(COMPACT_EVERY)
+        self.reductions > 0 && self.reductions % COMPACT_EVERY == 0
     }
 }
 
@@ -127,7 +127,7 @@ pub(crate) fn compact(
 ) -> Result<()> {
     let remap = arena.compact()?;
 
-    for watch_list in long_watchers.iter_mut() {
+    for watch_list in &mut *long_watchers {
         watch_list.retain_mut(|w| {
             let slot = ClauseArena::slot_of(w.clause);
             if let Some(new_id) = remap.get(slot).copied().flatten() {
@@ -141,12 +141,10 @@ pub(crate) fn compact(
 
     learned_clauses.retain_mut(|id| {
         let slot = ClauseArena::slot_of(*id);
-        if let Some(new_id) = remap.get(slot).copied().flatten() {
+        remap.get(slot).copied().flatten().is_some_and(|new_id| {
             *id = new_id;
             true
-        } else {
-            false
-        }
+        })
     });
 
     assignment.remap_long_reasons(|id| {
@@ -279,12 +277,13 @@ mod tests {
         let _ = push_learned(&mut arena, &mut lw, &mut learned, &[v(4).neg(), v(5).neg(), v(6).pos()], 6);
         reduce_learned(&mut arena, &mut lw, &mut learned, &assignment);
         assert!(
-            learned.iter().any(|&x| x == locked_id),
+            learned.contains(&locked_id),
             "locked clause must survive reduction even though its LBD is the worst",
         );
     }
 
     #[test]
+    #[allow(clippy::many_single_char_names, reason = "literals named after their variable indices")]
     fn compact_removes_deleted_and_rewrites_watchers() {
         let (mut arena, mut assignment, mut lw, mut learned) = setup(6);
         // Two learned clauses; mark the first deleted, then compact.
@@ -300,7 +299,7 @@ mod tests {
         learned.retain(|x| *x != id_a);
         // Pre-compaction: both clauses still in arena, watcher lists have
         // references to both (but the deleted one should be swept).
-        for wl in lw.iter_mut() {
+        for wl in &mut lw {
             wl.retain(|w| !arena.is_deleted(w.clause));
         }
         compact(&mut arena, &mut lw, &mut learned, &mut assignment).unwrap();

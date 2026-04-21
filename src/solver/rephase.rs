@@ -93,18 +93,20 @@ impl RephaseState {
 
     /// Returns the mode that will be applied by the next rephase.
     #[cfg(test)]
+    #[allow(dead_code, reason = "introspection helper for rephase unit tests")]
     pub(crate) const fn mode(&self) -> RephaseMode {
         self.mode
     }
 
     /// Returns the running count of rephase events.
     #[cfg(test)]
+    #[allow(dead_code, reason = "introspection helper for rephase unit tests")]
     pub(crate) const fn rephases(&self) -> u64 {
         self.rephases
     }
 
     /// Grows the interval by `3/2` and rotates the mode for the next event.
-    pub(crate) fn advance(&mut self, conflicts: u64) {
+    pub(crate) const fn advance(&mut self, conflicts: u64) {
         self.interval = self.interval.saturating_add(self.interval / 2);
         self.next_rephase = conflicts.saturating_add(self.interval);
         self.mode = self.mode.next();

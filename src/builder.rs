@@ -44,7 +44,6 @@ impl core::fmt::Debug for SolverBuilder {
 impl SolverBuilder {
     /// Creates a fresh builder with default settings.
     #[inline]
-    #[must_use]
     pub const fn new() -> Self {
         Self {
             conflict_budget: None,
@@ -61,35 +60,35 @@ impl SolverBuilder {
 
     /// Sets a conflict budget. Search aborts after this many conflicts.
     #[inline]
-    pub fn with_conflict_budget(mut self, budget: u64) -> Self {
+    pub const fn with_conflict_budget(mut self, budget: u64) -> Self {
         self.conflict_budget = Some(budget);
         self
     }
 
     /// Sets a propagation budget.
     #[inline]
-    pub fn with_propagation_budget(mut self, budget: u64) -> Self {
+    pub const fn with_propagation_budget(mut self, budget: u64) -> Self {
         self.propagation_budget = Some(budget);
         self
     }
 
     /// Sets a wall-clock timeout in milliseconds.
     #[inline]
-    pub fn with_timeout_ms(mut self, ms: u64) -> Self {
+    pub const fn with_timeout_ms(mut self, ms: u64) -> Self {
         self.timeout_ms = Some(ms);
         self
     }
 
     /// Sets the chronological-backtracking jump threshold.
     #[inline]
-    pub fn with_chrono_gap(mut self, gap: u32) -> Self {
+    pub const fn with_chrono_gap(mut self, gap: u32) -> Self {
         self.chrono_gap = Some(gap);
         self
     }
 
     /// Enables verbose progress output.
     #[inline]
-    pub fn verbose(mut self, on: bool) -> Self {
+    pub const fn verbose(mut self, on: bool) -> Self {
         self.verbose = on;
         self
     }
@@ -135,7 +134,7 @@ impl SolverBuilder {
     }
 
     /// Constructs a solver seeded with the given formula.
-    pub fn build_from(self, cnf: Cnf) -> Result<Solver> {
+    pub fn build_from(self, cnf: &Cnf) -> Result<Solver> {
         let mut solver = self.build();
         let _ = cnf.num_vars();
         for clause in cnf.clauses() {

@@ -107,7 +107,7 @@ impl RestartState {
     }
 
     /// Clears the restart window counter after a restart fires.
-    pub(crate) fn reset_window(&mut self) {
+    pub(crate) const fn reset_window(&mut self) {
         self.conflicts_since_restart = 0;
     }
 }

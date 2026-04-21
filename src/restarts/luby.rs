@@ -77,7 +77,8 @@ mod tests {
     fn luby_sequence_matches_reference() {
         let expected = [1u64, 1, 2, 1, 1, 2, 4, 1, 1, 2, 1, 1, 2, 4, 8];
         for (i, &want) in expected.iter().enumerate() {
-            let idx = u64::try_from(i).expect("fits") + 1;
+            let Ok(idx) = u64::try_from(i) else { continue };
+            let idx = idx + 1;
             assert_eq!(Luby::luby(idx), want, "luby({idx})");
         }
     }

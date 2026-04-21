@@ -4,6 +4,15 @@
 //! preserve variable counts, clause counts, and per-clause literal order.
 
 #![cfg(feature = "dimacs")]
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    reason = "proptest strategies and test harness use expect/unwrap and integer casts"
+)]
 
 use clausal::dimacs::{CnfDimacsExt, Parser, Writer};
 use clausal::{Cnf, Lit};

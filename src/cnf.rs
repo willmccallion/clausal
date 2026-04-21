@@ -25,14 +25,12 @@ pub struct Cnf {
 impl Cnf {
     /// Creates an empty formula with no variables and no clauses.
     #[inline]
-    #[must_use]
     pub const fn new() -> Self {
         Self { clauses: Vec::new(), num_vars: 0 }
     }
 
     /// Creates an empty formula with space reserved for `clause_cap` clauses.
     #[inline]
-    #[must_use]
     pub fn with_capacity(clause_cap: usize) -> Self {
         Self { clauses: Vec::with_capacity(clause_cap), num_vars: 0 }
     }
@@ -100,7 +98,7 @@ impl Cnf {
 
     /// Returns an iterator over every allocated variable.
     #[inline]
-    pub fn vars(&self) -> VarsIter {
+    pub const fn vars(&self) -> VarsIter {
         VarsIter { next: 1, end: self.num_vars.saturating_add(1) }
     }
 
@@ -221,7 +219,7 @@ mod proptests {
             for _ in 0..n {
                 let _ = cnf.new_var().ok();
             }
-            prop_assert_eq!(cnf.vars().count() as u32, n);
+            prop_assert_eq!(u32::try_from(cnf.vars().count()).unwrap_or(u32::MAX), n);
             prop_assert_eq!(cnf.num_vars(), n);
         }
 

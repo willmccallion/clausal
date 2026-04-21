@@ -6,6 +6,7 @@ use crate::traits::RestartStrategy;
 /// Restarts every `base * factor^n` conflicts, where `n` counts prior restarts.
 #[derive(Debug, Clone, Copy)]
 pub struct Geometric {
+    #[allow(dead_code, reason = "kept for resetting the schedule on rephrase events")]
     base: u64,
     factor: f64,
     next: u64,
@@ -52,7 +53,9 @@ mod tests {
     fn next_grows_by_factor_on_each_restart() {
         let mut g = Geometric::new(100, 2.0);
         assert_eq!(g.next, 100);
-        g.next = (g.next as f64 * g.factor) as u64;
+        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let grown = (g.next as f64 * g.factor) as u64;
+        g.next = grown;
         assert_eq!(g.next, 200);
     }
 

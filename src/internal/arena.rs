@@ -37,6 +37,7 @@ pub(crate) struct ClauseMeta {
 impl ClauseMeta {
     /// Returns `true` if this clause was learned by conflict analysis.
     #[inline]
+    #[allow(dead_code, reason = "consumed when inprocessing walks learned clauses")]
     pub(crate) const fn is_learned(self) -> bool {
         self.flags & FLAG_LEARNED != 0
     }
@@ -67,16 +68,19 @@ impl ClauseArena {
     }
 
     /// Returns the total number of literal words stored across all clauses.
+    #[allow(dead_code, reason = "used by inprocessing passes to size scratch buffers")]
     pub(crate) fn num_lit_words(&self) -> usize {
         self.lits.len()
     }
 
     /// Returns `true` if the arena holds no clauses.
+    #[allow(dead_code, reason = "state fixtures and integrity checks call this")]
     pub(crate) fn is_empty(&self) -> bool {
         self.meta.is_empty()
     }
 
     /// Removes every clause.
+    #[allow(dead_code, reason = "reserved for full solver reset path")]
     pub(crate) fn clear(&mut self) {
         self.meta.clear();
         self.lits.clear();
@@ -104,25 +108,27 @@ impl ClauseArena {
     }
 
     #[inline]
-    fn slot(id: ClauseId) -> usize {
-        // `ClauseId` stores `slot + 1` in its nonzero inner value.
+    const fn slot(id: ClauseId) -> usize {
         (id.to_raw().get() - 1) as usize
     }
 
     /// Returns the metadata for a clause.
     #[inline]
+    #[allow(dead_code, reason = "consumed by inprocessing and proof-writer integrations")]
     pub(crate) fn meta(&self, id: ClauseId) -> ClauseMeta {
         self.meta[Self::slot(id)]
     }
 
     /// Returns the length of a clause in literals.
     #[inline]
+    #[allow(dead_code, reason = "inprocessing and proof writers inspect clause length")]
     pub(crate) fn len(&self, id: ClauseId) -> u32 {
         self.meta[Self::slot(id)].len
     }
 
     /// Returns `true` if the clause was learned.
     #[inline]
+    #[allow(dead_code, reason = "consumed by reduceDB and inprocessing paths")]
     pub(crate) fn is_learned(&self, id: ClauseId) -> bool {
         self.meta[Self::slot(id)].is_learned()
     }
@@ -141,6 +147,7 @@ impl ClauseArena {
 
     /// Overwrites the LBD of a clause.
     #[inline]
+    #[allow(dead_code, reason = "vivification rewrites LBD after shortening a clause")]
     pub(crate) fn set_lbd(&mut self, id: ClauseId, lbd: u32) {
         self.meta[Self::slot(id)].lbd = lbd;
     }
@@ -208,7 +215,7 @@ impl ClauseArena {
 
     /// Returns the zero-based slot index behind `id`.
     #[inline]
-    pub(crate) fn slot_of(id: ClauseId) -> usize {
+    pub(crate) const fn slot_of(id: ClauseId) -> usize {
         Self::slot(id)
     }
 }

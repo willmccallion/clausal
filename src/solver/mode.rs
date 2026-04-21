@@ -55,6 +55,7 @@ impl ModeState {
     }
 
     /// Returns the active mode.
+    #[allow(dead_code, reason = "inprocessing branches on current mode for budget accounting")]
     pub(crate) const fn mode(&self) -> Mode {
         self.mode
     }

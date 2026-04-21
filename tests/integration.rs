@@ -1,6 +1,16 @@
 //! Integration tests: run the engine end-to-end on hand-built formulas
 //! whose verdicts are known, and on small combinatorial instances.
 
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::needless_range_loop,
+    clippy::uninlined_format_args,
+    clippy::missing_const_for_fn,
+    clippy::stable_sort_primitive,
+    reason = "test harness uses expect/unwrap and index loops for readability"
+)]
+
 use clausal::{Lit, Polarity, Solution, Solver, Var};
 
 fn lit(v: Var, pos: bool) -> Lit {

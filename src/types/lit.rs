@@ -66,11 +66,16 @@ pub struct Lit(NonZeroU32);
 
 impl Lit {
     /// Builds a literal from a variable and polarity.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the encoding `(var.to_raw() << 1) | pol_bit` is
+    /// always `>= 2` because `var.to_raw() >= 1`. The panic is unreachable
+    /// and exists only to keep this function `const`.
     #[inline]
     #[must_use]
     pub const fn new(var: Var, pol: Polarity) -> Self {
         let raw = (var.to_raw() << 1) | pol.as_bit();
-        // `var.to_raw() >= 1`, so `raw >= 2`, which is nonzero.
         match NonZeroU32::new(raw) {
             Some(n) => Self(n),
             None => panic!("internal invariant: Lit encoding produced zero"),
@@ -109,6 +114,12 @@ impl Lit {
     }
 
     /// Returns the variable this literal refers to.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the encoding guarantees the upper bits decode to
+    /// a nonzero variable. The panic is unreachable and exists only to keep
+    /// this function `const`.
     #[inline]
     #[must_use]
     pub const fn var(self) -> Var {
@@ -155,6 +166,7 @@ impl Lit {
     /// Solver-internal use only.
     #[inline]
     #[must_use]
+    #[allow(dead_code, reason = "arena round-trips Lit values through u32; retained for future inprocessing")]
     pub(crate) const fn to_raw(self) -> u32 {
         self.0.get()
     }
@@ -165,6 +177,7 @@ impl Lit {
     /// `2` or with a variable portion outside `1..=Var::MAX_RAW`).
     #[inline]
     #[must_use]
+    #[allow(dead_code, reason = "arena round-trips Lit values through u32; retained for future inprocessing")]
     pub(crate) const fn from_raw(raw: u32) -> Option<Self> {
         if raw < 2 {
             return None;
@@ -185,13 +198,11 @@ impl Not for Lit {
 
     #[inline]
     fn not(self) -> Self {
-        // Flip the polarity bit. Low bit of self.0 is 0 or 1; XOR with 1
-        // leaves the variable bits unchanged and the result is still >= 2.
         let flipped = self.0.get() ^ 1;
-        match NonZeroU32::new(flipped) {
-            Some(n) => Self(n),
-            None => panic!("internal invariant: Lit negation produced zero"),
-        }
+        NonZeroU32::new(flipped).map_or_else(
+            || panic!("internal invariant: Lit negation produced zero"),
+            Self,
+        )
     }
 }
 

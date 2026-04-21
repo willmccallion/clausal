@@ -131,13 +131,15 @@ impl Assignment {
 
     /// Returns the next trail index to propagate.
     #[inline]
-    pub(crate) fn propagation_head(&self) -> usize {
+    #[allow(dead_code, reason = "inprocessing inspects the head when it pauses propagation")]
+    pub(crate) const fn propagation_head(&self) -> usize {
         self.propagation_head
     }
 
     /// Overwrites the propagation head.
     #[inline]
-    pub(crate) fn set_propagation_head(&mut self, idx: usize) {
+    #[allow(dead_code, reason = "inprocessing rewinds the head when vivifying under a trial trail")]
+    pub(crate) const fn set_propagation_head(&mut self, idx: usize) {
         self.propagation_head = idx;
     }
 
@@ -173,6 +175,7 @@ impl Assignment {
 
     /// Sets the best-seen phase for `var`.
     #[inline]
+    #[allow(dead_code, reason = "rephasing writes best-known phases directly into the trail")]
     pub(crate) fn set_best_phase(&mut self, var: Var, positive: bool) {
         self.best_phases[var.index()] = positive;
     }
@@ -241,7 +244,8 @@ impl Assignment {
 
     /// Returns the deepest trail length seen so far.
     #[inline]
-    pub(crate) fn best_trail_len(&self) -> usize {
+    #[allow(dead_code, reason = "stable-mode transitions compare against the best trail length")]
+    pub(crate) const fn best_trail_len(&self) -> usize {
         self.best_trail_len
     }
 
@@ -257,6 +261,7 @@ impl Assignment {
     }
 
     /// Clears every assignment and trail entry, keeping allocated storage.
+    #[allow(dead_code, reason = "reserved for full solver reset during inprocessing")]
     pub(crate) fn clear(&mut self) {
         self.values.fill(Value::Unassigned);
         self.lit_values.fill(Value::Unassigned);

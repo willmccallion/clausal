@@ -116,10 +116,10 @@ impl SolverState {
             {
                 continue;
             }
-            if buf.iter().any(|&x| x == !lit) {
+            if buf.contains(&!lit) {
                 return;
             }
-            if !buf.iter().any(|&x| x == lit) {
+            if !buf.contains(&lit) {
                 buf.push(lit);
             }
         }

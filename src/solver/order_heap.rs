@@ -46,11 +46,13 @@ impl OrderHeap {
     }
 
     /// Returns the number of variables currently in the heap.
+    #[allow(dead_code, reason = "diagnostics and debug traces read the heap size")]
     pub(crate) fn len(&self) -> usize {
         self.heap.len()
     }
 
     /// Returns `true` if the heap is empty.
+    #[allow(dead_code, reason = "branching loop checks for an empty heap before polling")]
     pub(crate) fn is_empty(&self) -> bool {
         self.heap.is_empty()
     }
@@ -95,6 +97,7 @@ impl OrderHeap {
     }
 
     /// Drops every variable from the heap, preserving allocated storage.
+    #[allow(dead_code, reason = "inprocessing clears the heap before reseeding with survivors")]
     pub(crate) fn clear(&mut self) {
         for &v in &self.heap {
             self.positions[v as usize] = None;

@@ -5,6 +5,17 @@
 //! crate's unstable `Bencher` so it compiles on stable Rust; invoke with
 //! `cargo run --release --bench solver`.
 
+#![allow(
+    clippy::expect_used,
+    clippy::print_stdout,
+    clippy::print_literal,
+    clippy::needless_range_loop,
+    clippy::uninlined_format_args,
+    clippy::missing_docs_in_private_items,
+    clippy::missing_const_for_fn,
+    reason = "bench harness uses println and index loops by design"
+)]
+
 use std::time::Instant;
 
 use clausal::{Lit, Polarity, Solution, Solver, Var};

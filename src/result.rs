@@ -67,29 +67,37 @@ impl<'s> Model<'s> {
 
     /// Returns the number of variables covered by the model.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.solver.num_vars() as usize
     }
 
     /// Returns `true` if the model covers zero variables.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Iterates over every variable's assigned polarity in variable order.
-    pub fn iter(&self) -> ModelIter<'_> {
+    pub const fn iter(&self) -> ModelIter<'_> {
         ModelIter { model: self, next: 1, end: self.solver.num_vars().saturating_add(1) }
     }
 
     /// Snapshots this model into a heap-allocated owned copy.
-    #[must_use]
     pub fn to_owned(&self) -> OwnedModel {
         let mut values = Vec::with_capacity(self.len());
-        for (_var, pol) in self.iter() {
+        for (_var, pol) in self {
             values.push(pol);
         }
         OwnedModel { values }
+    }
+}
+
+impl<'a> IntoIterator for &'a Model<'_> {
+    type Item = (Var, Polarity);
+    type IntoIter = ModelIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
@@ -123,7 +131,6 @@ pub struct OwnedModel {
 
 impl OwnedModel {
     /// Creates an empty owned model.
-    #[must_use]
     pub const fn new() -> Self {
         Self { values: Vec::new() }
     }
@@ -155,6 +162,15 @@ impl OwnedModel {
 
     /// Iterates over every polarity in variable order.
     pub fn iter(&self) -> slice::Iter<'_, Polarity> {
+        self.values.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a OwnedModel {
+    type Item = &'a Polarity;
+    type IntoIter = slice::Iter<'a, Polarity>;
+
+    fn into_iter(self) -> Self::IntoIter {
         self.values.iter()
     }
 }
@@ -194,6 +210,15 @@ impl<'s> UnsatCore<'s> {
     }
 }
 
+impl<'s> IntoIterator for &UnsatCore<'s> {
+    type Item = &'s Lit;
+    type IntoIter = core::slice::Iter<'s, Lit>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.lits().iter()
+    }
+}
+
 /// Iterator over all satisfying assignments of a solver's current formula.
 #[derive(Debug)]
 pub struct Solutions<'s> {
@@ -201,7 +226,7 @@ pub struct Solutions<'s> {
 }
 
 impl<'s> Solutions<'s> {
-    pub(crate) fn new(solver: &'s mut Solver) -> Self {
+    pub(crate) const fn new(solver: &'s mut Solver) -> Self {
         Self { solver }
     }
 }

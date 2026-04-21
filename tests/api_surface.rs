@@ -1,6 +1,14 @@
 //! Touches every publicly constructible entry point once so any signature
 //! change surfaces as a compile error here.
 
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::needless_pass_by_value,
+    clippy::bool_assert_comparison,
+    reason = "surface smoke test uses expect on infallible constructors"
+)]
+
 use clausal::{
     Cnf, DecisionLevel, Error, InterruptReason, Interrupter, Limited, Lit, Model, OwnedModel,
     Polarity, Result, Solution, Solver, SolverBuilder, Statistics, UnsatCore, Value, Var,
@@ -36,7 +44,7 @@ fn touch_builder(cnf: Cnf) -> Result<Solver> {
         .with_timeout_ms(250)
         .with_chrono_gap(100)
         .verbose(false);
-    builder.build_from(cnf)
+    builder.build_from(&cnf)
 }
 
 fn touch_solver(solver: &mut Solver) -> Result<()> {

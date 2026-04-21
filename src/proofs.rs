@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn drat_add_then_delete_is_written() {
-        let buf: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = Default::default();
+        let buf: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = std::sync::Arc::default();
         let mut w = DratWriter::new(BufSink(buf.clone()));
         w.record_add(id(1), &[lit(1), lit(-2)]).unwrap();
         w.record_delete(id(1), &[lit(1), lit(-2)]).unwrap();
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn drat_format_is_drat() {
-        let buf: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = Default::default();
+        let buf: std::sync::Arc<std::sync::Mutex<Vec<u8>>> = std::sync::Arc::default();
         let w = DratWriter::new(BufSink(buf));
         assert_eq!(w.format(), ProofFormat::Drat);
     }

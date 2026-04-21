@@ -36,14 +36,13 @@ pub struct Solver {
 impl Solver {
     /// Creates a solver with default configuration.
     #[inline]
-    #[must_use]
     pub const fn new() -> Self {
         Self { pending: Vec::new(), state: SolverState::new() }
     }
 
     /// Returns a builder for configuring a new solver.
     #[inline]
-    pub fn builder() -> SolverBuilder {
+    pub const fn builder() -> SolverBuilder {
         SolverBuilder::new()
     }
 
@@ -192,7 +191,7 @@ impl Solver {
 
     /// Returns the model for the most recent SAT result, if any.
     #[must_use]
-    pub fn model(&self) -> Option<Model<'_>> {
+    pub const fn model(&self) -> Option<Model<'_>> {
         match self.state.last_outcome {
             LastOutcome::Sat => Some(Model::new(self)),
             _ => None,
@@ -201,7 +200,7 @@ impl Solver {
 
     /// Returns the UNSAT core for the most recent UNSAT result, if any.
     #[must_use]
-    pub fn unsat_core(&self) -> Option<UnsatCore<'_>> {
+    pub const fn unsat_core(&self) -> Option<UnsatCore<'_>> {
         match self.state.last_outcome {
             LastOutcome::Unsat => Some(UnsatCore::new(self)),
             _ => None,
@@ -209,7 +208,7 @@ impl Solver {
     }
 
     /// Returns an iterator over every satisfying assignment.
-    pub fn solutions(&mut self) -> Solutions<'_> {
+    pub const fn solutions(&mut self) -> Solutions<'_> {
         Solutions::new(self)
     }
 
