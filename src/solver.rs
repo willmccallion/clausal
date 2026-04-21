@@ -2,6 +2,7 @@
 
 pub(crate) mod order_heap;
 pub(crate) mod reduce;
+pub(crate) mod rephase;
 pub(crate) mod restart;
 pub(crate) mod search;
 

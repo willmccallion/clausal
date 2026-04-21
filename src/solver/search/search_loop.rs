@@ -15,6 +15,7 @@ use crate::internal::trail::Assignment;
 use crate::internal::watcher::{attach_binary, attach_long, BinaryWatchers, LongWatchers};
 use crate::solver::order_heap::OrderHeap;
 use crate::solver::reduce::{compact, reduce_learned, ReduceState};
+use crate::solver::rephase::RephaseState;
 use crate::solver::restart::RestartState;
 use crate::solver::search::analyze::analyze;
 use crate::solver::search::backtrack::backtrack_to;
@@ -46,6 +47,8 @@ pub(crate) struct SearchScratch {
     pub(crate) reduce: ReduceState,
     pub(crate) reductions: u64,
     pub(crate) compactions: u64,
+    pub(crate) rephase: RephaseState,
+    pub(crate) rephases: u64,
 }
 
 impl SearchScratch {
@@ -66,6 +69,8 @@ impl SearchScratch {
             reduce: ReduceState::new(),
             reductions: 0,
             compactions: 0,
+            rephase: RephaseState::new(),
+            rephases: 0,
         }
     }
 
@@ -151,7 +156,8 @@ pub(crate) fn solve_loop(
             #[allow(clippy::cast_precision_loss)]
             let restart = scratch.restart.should_restart(peak_trail_len as f64);
             let reduce = scratch.reduce.should_reduce(scratch.conflicts);
-            if restart || reduce {
+            let rephase = scratch.rephase.should_rephase(scratch.conflicts);
+            if restart || reduce || rephase {
                 reinsert_from_trail(
                     assignment,
                     &mut scratch.heap,
@@ -172,6 +178,10 @@ pub(crate) fn solve_loop(
                     {
                         scratch.compactions = scratch.compactions.saturating_add(1);
                     }
+                }
+                if rephase {
+                    scratch.rephase.apply(assignment, scratch.conflicts);
+                    scratch.rephases = scratch.rephases.saturating_add(1);
                 }
             }
         } else if let Some(var) = pick_branching_var(&mut scratch.heap, &scratch.activities, assignment) {
