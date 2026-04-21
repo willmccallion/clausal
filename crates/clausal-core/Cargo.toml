@@ -1,0 +1,25 @@
+[package]
+name = "clausal-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Core types, traits, and stubs for the clausal SAT solver. no_std-compatible."
+readme = "../../README.md"
+categories.workspace = true
+keywords.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+static_assertions = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true

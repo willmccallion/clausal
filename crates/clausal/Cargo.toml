@@ -1,0 +1,30 @@
+[package]
+name = "clausal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description.workspace = true
+readme = "../../README.md"
+categories.workspace = true
+keywords.workspace = true
+
+[features]
+default = ["std", "dimacs"]
+std = []
+dimacs = ["dep:clausal-dimacs"]
+proofs = ["dep:clausal-proofs"]
+ipasir = ["dep:clausal-ipasir"]
+wasm = []
+
+[dependencies]
+clausal-core = { workspace = true }
+clausal-dimacs = { workspace = true, optional = true }
+clausal-proofs = { workspace = true, optional = true }
+clausal-ipasir = { workspace = true, optional = true }
+
+[lints]
+workspace = true
