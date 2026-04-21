@@ -57,6 +57,9 @@ The `compare.py` harness runs each (solver, instance) pair under a CPU-time
 and memory rlimit, parses the competition-format verdict, cross-checks
 verdicts across solvers for correctness bugs, and prints a PAR-2 summary.
 
+Defaults match SAT Competition 2025 Main Track on BenchCloud: 5000 s CPU
+per instance and 30 GB RAM. Pass `--timeout` / `--mem` to override.
+
 ## Source
 
 SATLIB sets come from Holger Hoos' archive:

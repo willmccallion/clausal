@@ -2,3 +2,9 @@
 /Cargo.lock.backup
 *.swp
 .DS_Store
+
+bench/instances/
+bench/compare-satcomp-with-clausal.*
+bench/compare-phase*.csv
+
+.claude/

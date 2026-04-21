@@ -32,7 +32,8 @@ Methodology notes:
     a CORRECTNESS WARNING and the exit code is non-zero.
 
 Defaults target bench/instances/uf200-860 and bench/instances/uuf200-860
-with a 300s CPU limit and 4 GB memory limit, writing results to
+with a 5000s CPU limit and 30 GB memory limit (matching SAT Competition
+2025 Main Track on BenchCloud), writing results to
 bench/compare-results.csv and bench/compare-cactus.png.
 """
 
@@ -524,10 +525,12 @@ def main() -> int:
         description="Compare clausal against reference CDCL solvers.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("--timeout", type=int, default=300,
-                    help="CPU time limit per instance, seconds (default: 300)")
-    ap.add_argument("--mem", type=int, default=4096,
-                    help="Memory limit per instance, MB (default: 4096)")
+    ap.add_argument("--timeout", type=int, default=5000,
+                    help="CPU time limit per instance, seconds (default: 5000, "
+                         "matches SAT Comp 2025 Main Track)")
+    ap.add_argument("--mem", type=int, default=30720,
+                    help="Memory limit per instance, MB (default: 30720 = "
+                         "30 GB, matches SAT Comp 2025 Main Track)")
     ap.add_argument("--instances", nargs="+", default=[
         str(REPO_ROOT / "bench" / "instances" / "uf200-860"),
         str(REPO_ROOT / "bench" / "instances" / "uuf200-860"),
