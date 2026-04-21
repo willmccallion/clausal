@@ -7,11 +7,9 @@
 //! # Status
 //!
 //! Early scaffolding. The public API compiles and is honest about what it
-//! does — every call to [`Cnf::solve`] currently returns
+//! does: every call to `solve` currently returns
 //! [`Error::NotImplemented`]. The engine lands in subsequent releases.
 //!
-//! [`Cnf::solve`]: clausal_core::Cnf::solve
-//! [`Error::NotImplemented`]: clausal_core::Error::NotImplemented
+//! [`Error::NotImplemented`]: clausal_core::types
 
-// Re-exports land alongside the first public types in the next commit.
-
+pub use clausal_core::{Clause, ClauseId, DecisionLevel, Lit, Polarity, Value, Var};

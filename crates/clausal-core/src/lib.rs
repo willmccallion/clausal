@@ -13,3 +13,23 @@
 //!
 //! [clausal]: https://crates.io/crates/clausal
 #![no_std]
+
+extern crate alloc;
+
+pub mod types;
+
+pub use types::{Clause, ClauseId, DecisionLevel, Lit, Polarity, Value, Var};
+
+use static_assertions::{assert_eq_size, assert_impl_all};
+
+// Compile-time guarantees: niche optimisations hold and handle types are
+// thread-safe and cheap to copy.
+assert_eq_size!(Var, Option<Var>);
+assert_eq_size!(Lit, Option<Lit>);
+assert_eq_size!(ClauseId, Option<ClauseId>);
+assert_impl_all!(Var: Copy, Send, Sync, Eq, core::hash::Hash, Ord);
+assert_impl_all!(Lit: Copy, Send, Sync, Eq, core::hash::Hash, Ord);
+assert_impl_all!(ClauseId: Copy, Send, Sync, Eq, core::hash::Hash, Ord);
+assert_impl_all!(Polarity: Copy, Send, Sync, Eq, core::hash::Hash, Ord);
+assert_impl_all!(Value: Copy, Send, Sync, Eq, core::hash::Hash);
+assert_impl_all!(DecisionLevel: Copy, Send, Sync, Eq, core::hash::Hash, Ord);
