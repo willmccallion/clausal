@@ -12,4 +12,13 @@
 //!
 //! [`Error::NotImplemented`]: clausal_core::types
 
-pub use clausal_core::{Clause, ClauseId, Cnf, DecisionLevel, Error, Lit, Polarity, Result, Value, Var};
+pub use clausal_core::builder::SolverBuilder;
+pub use clausal_core::cnf::Cnf;
+pub use clausal_core::context::{ClauseRef, FormulaView, SearchContext};
+pub use clausal_core::error::{Error, Result};
+#[cfg(all(target_has_atomic = "8", target_has_atomic = "ptr"))]
+pub use clausal_core::interrupter::Interrupter;
+pub use clausal_core::result::{InterruptReason, Limited, Model, OwnedModel, Solution, Solutions, UnsatCore};
+pub use clausal_core::solver::Solver;
+pub use clausal_core::stats::Statistics;
+pub use clausal_core::types::{Clause, ClauseId, DecisionLevel, Lit, Polarity, Value, Var};
