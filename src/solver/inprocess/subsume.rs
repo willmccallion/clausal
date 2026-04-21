@@ -36,6 +36,14 @@ const SUBSUMER_LEN_CAP: u32 = 32;
 ///
 /// Returns [`InprocessOutcome::Unsat`] if SSR strengthens any clause to
 /// the empty clause or to a conflicting unit.
+#[allow(
+    clippy::too_many_lines,
+    reason = "Pass weaves occurrence-list walk, bloom test, SSR rewrite, and watcher sweep; splitting would need duplicate traversal state."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Clause lengths and variable indices are bounded by u32 limits enforced elsewhere."
+)]
 pub(crate) fn subsume(
     arena: &mut ClauseArena,
     assignment: &mut Assignment,
@@ -243,10 +251,7 @@ fn classify(a: &[Lit], b: &[Lit]) -> Match {
         }
         return Match::None;
     }
-    match mismatch {
-        None => Match::Subsumes,
-        Some(l) => Match::Strengthen(l),
-    }
+    mismatch.map_or(Match::Subsumes, Match::Strengthen)
 }
 
 #[cfg(test)]

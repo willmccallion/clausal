@@ -38,6 +38,7 @@ impl core::fmt::Debug for SolverBuilder {
             .field("restart", &self.restart.as_ref().map(|r| r.name()))
             .field("deletion", &self.deletion.as_ref().map(|d| d.name()))
             .field("preprocessor", &self.preprocessor.as_ref().map(|p| p.name()))
+            .field("enable_inprocessing", &self.enable_inprocessing)
             .finish()
     }
 }

@@ -26,7 +26,7 @@ pub(crate) fn bve(
     arena: &mut ClauseArena,
     assignment: &mut Assignment,
     long_watchers: &mut LongWatchers,
-    bin_watchers: &mut BinaryWatchers,
+    bin_watchers: &BinaryWatchers,
     num_vars: u32,
 ) -> InprocessOutcome {
     debug_assert!(assignment.current_level().is_ground());
@@ -67,7 +67,9 @@ pub(crate) fn bve(
 
     // Walk binary watchers. Each binary (a, b) lives at bin_watchers[!a]
     // and bin_watchers[!b]; iterate once per pair via raw ordering.
-    for raw in 0..num_lits as u32 {
+    #[allow(clippy::cast_possible_truncation, reason = "num_lits = 2 * num_vars fits in u32")]
+    let lit_bound = num_lits as u32;
+    for raw in 0..lit_bound {
         let Some(a_neg) = lit_from_index(raw) else {
             continue;
         };
@@ -187,7 +189,7 @@ mod tests {
                 &mut self.arena,
                 &mut self.assignment,
                 &mut self.lw,
-                &mut self.bw,
+                &self.bw,
                 self.num_vars,
             )
         }

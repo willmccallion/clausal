@@ -88,7 +88,7 @@ impl Solver {
     /// See [`SolverBuilder::enable_inprocessing`](crate::SolverBuilder::enable_inprocessing)
     /// for a discussion of when the pass set is safe to run.
     #[inline]
-    pub fn set_inprocessing(&mut self, on: bool) {
+    pub const fn set_inprocessing(&mut self, on: bool) {
         self.state.enable_inprocessing = on;
     }
 

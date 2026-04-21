@@ -303,7 +303,7 @@ impl SolverState {
             &mut self.arena,
             &mut self.assignment,
             &mut self.long_watchers,
-            &mut self.bin_watchers,
+            &self.bin_watchers,
         )
         .is_some()
         {
@@ -314,7 +314,7 @@ impl SolverState {
             &mut self.arena,
             &mut self.assignment,
             &mut self.long_watchers,
-            &mut self.bin_watchers,
+            &self.bin_watchers,
             self.num_vars,
         ) == InprocessOutcome::Unsat
         {
@@ -325,7 +325,7 @@ impl SolverState {
             &mut self.arena,
             &mut self.assignment,
             &mut self.long_watchers,
-            &mut self.bin_watchers,
+            &self.bin_watchers,
             &self.scratch.activities,
             self.num_vars,
             0,

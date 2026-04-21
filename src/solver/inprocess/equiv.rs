@@ -37,6 +37,14 @@ pub(crate) struct EquivFrame {
 }
 
 /// Runs an equivalent-literal substitution pass at the ground level.
+#[allow(
+    clippy::too_many_lines,
+    reason = "Single pass contains Tarjan SCC plus post-substitution clause rewrite; splitting would force extra state to be threaded back and forth."
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "Literal indices are bounded by 2 * num_vars and Var::MAX_RAW, both fit in u32."
+)]
 pub(crate) fn equiv(
     arena: &mut ClauseArena,
     assignment: &mut Assignment,
@@ -96,7 +104,7 @@ pub(crate) fn equiv(
                 let next_raw = bw_entry.partner.to_raw();
                 // For edge `l -> other` we need the literal id of `other`
                 // on the successor side, matching our graph convention.
-                let next_id = u32::from(next_raw) - 2;
+                let next_id = next_raw.saturating_sub(2);
                 if next_id == node {
                     continue;
                 }
@@ -125,8 +133,7 @@ pub(crate) fn equiv(
             if cursor >= successors_len {
                 // SCC root check.
                 if lowlink[node as usize] == index[node as usize] {
-                    loop {
-                        let Some(w) = tarjan_stack.pop() else { break };
+                    while let Some(w) = tarjan_stack.pop() {
                         on_stack[w as usize] = false;
                         scc_id[w as usize] = next_scc;
                         if w == node {

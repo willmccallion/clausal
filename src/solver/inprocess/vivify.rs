@@ -28,6 +28,10 @@ pub(crate) const LBD_CAP: u32 = 6;
 ///
 /// `budget` caps the number of propagation steps the pass may consume;
 /// zero disables the cap entirely.
+#[allow(
+    clippy::too_many_lines,
+    reason = "Pass interleaves snapshotting, per-literal probe, clause reinstallation, and watcher sweep; extracting each would force shared scratch buffers across call sites."
+)]
 pub(crate) fn vivify(
     arena: &mut ClauseArena,
     assignment: &mut Assignment,
