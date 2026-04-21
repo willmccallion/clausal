@@ -1,8 +1,7 @@
 //! Installs a custom decision heuristic on the builder.
 
-use clausal::{Lit, Polarity, Result, SearchContext, Solution, Solver, Var};
-use clausal_core::traits::DecisionHeuristic;
-use clausal_core::types::DecisionLevel;
+use clausal::traits::DecisionHeuristic;
+use clausal::{DecisionLevel, Lit, Polarity, Result, SearchContext, Solution, Solver, Var};
 
 #[derive(Debug, Default)]
 struct AlwaysSmallest {

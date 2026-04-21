@@ -1,9 +1,11 @@
-//! Core types and traits for the clausal SAT solver.
+//! A pure-Rust CDCL SAT solver.
 //!
-//! `no_std`-compatible; depends only on `core` and `alloc`. The top-level
-//! `clausal` crate re-exports this surface and gates DIMACS parsing, proof
-//! emission, and an IPASIR C ABI behind Cargo features.
+//! `no_std`-compatible; depends only on `core` and `alloc`. DIMACS parsing
+//! and proof emission are gated behind Cargo features.
 #![no_std]
+
+#[cfg(any(feature = "std", test))]
+extern crate std;
 
 extern crate alloc;
 
@@ -24,6 +26,11 @@ pub mod stats;
 pub mod traits;
 pub mod types;
 
+#[cfg(feature = "dimacs")]
+pub mod dimacs;
+#[cfg(feature = "proofs")]
+pub mod proofs;
+
 pub use builder::SolverBuilder;
 pub use cnf::Cnf;
 pub use context::{ClauseRef, FormulaView, SearchContext};
@@ -37,7 +44,6 @@ pub use types::{Clause, ClauseId, DecisionLevel, Lit, Polarity, Value, Var};
 
 use static_assertions::{assert_eq_size, assert_impl_all};
 
-// Niche optimisations hold and handle types are Copy, Send, Sync, Eq, Hash, Ord.
 assert_eq_size!(Var, Option<Var>);
 assert_eq_size!(Lit, Option<Lit>);
 assert_eq_size!(ClauseId, Option<ClauseId>);

@@ -2,8 +2,8 @@
 
 #[cfg(feature = "dimacs")]
 fn main() -> clausal::Result<()> {
+    use clausal::dimacs::Parser;
     use clausal::{Solution, Solver};
-    use clausal_dimacs::Parser;
     use std::path::Path;
 
     let path = Path::new("examples/sample.cnf");

@@ -1,8 +1,9 @@
-//! DIMACS CNF parser and writer for [`clausal`](../clausal/).
+//! DIMACS CNF parser and writer.
 
 use std::path::Path;
+use std::string::String;
 
-use clausal_core::{Cnf, Error, Result};
+use crate::{Cnf, Error, Result};
 
 /// Reads DIMACS CNF text into a [`Cnf`].
 #[derive(Debug, Default, Clone, Copy)]

@@ -1,6 +1,6 @@
-//! DRAT, LRAT, and FRAT proof emitters for [`clausal`](../clausal/).
+//! DRAT, LRAT, and FRAT proof emitters.
 
-use clausal_core::{ClauseId, Error, Lit, Result};
+use crate::{ClauseId, Error, Lit, Result};
 
 mod private {
     pub trait Sealed {}

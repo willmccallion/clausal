@@ -1,7 +1,7 @@
 //! The ProofWriter trait is sealed; external impls must fail.
 
+use clausal::proofs::{ProofFormat, ProofWriter};
 use clausal::{ClauseId, Lit, Result};
-use clausal_proofs::{ProofFormat, ProofWriter};
 
 struct Mine;
 

@@ -1,14 +1,5 @@
-[workspace]
-members = [
-    "crates/clausal-core",
-    "crates/clausal",
-    "crates/clausal-dimacs",
-    "crates/clausal-proofs",
-    "crates/clausal-ipasir",
-]
-resolver = "3"
-
-[workspace.package]
+[package]
+name = "clausal"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
@@ -21,14 +12,17 @@ readme = "README.md"
 categories = ["algorithms", "mathematics", "no-std", "wasm"]
 keywords = ["sat", "solver", "cdcl", "satisfiability", "logic"]
 
-[workspace.dependencies]
-clausal-core = { version = "0.1.0", path = "crates/clausal-core", default-features = false }
-clausal = { version = "0.1.0", path = "crates/clausal", default-features = false }
-clausal-dimacs = { version = "0.1.0", path = "crates/clausal-dimacs", default-features = false }
-clausal-proofs = { version = "0.1.0", path = "crates/clausal-proofs", default-features = false }
-clausal-ipasir = { version = "0.1.0", path = "crates/clausal-ipasir", default-features = false }
+[features]
+default = ["std", "dimacs"]
+std = []
+dimacs = ["std"]
+proofs = []
+wasm = []
 
+[dependencies]
 static_assertions = "1.1"
+
+[dev-dependencies]
 proptest = "1.5"
 trybuild = "1.0"
 
@@ -51,14 +45,14 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 3
 
-[workspace.lints.rust]
+[lints.rust]
 missing_docs = "warn"
 missing_debug_implementations = "warn"
 unused_results = "deny"
-unsafe_code = "deny"
+unsafe_code = "forbid"
 rust_2018_idioms = { level = "deny", priority = -1 }
 
-[workspace.lints.clippy]
+[lints.clippy]
 pedantic = { level = "deny", priority = -1 }
 nursery  = { level = "deny", priority = -1 }
 cargo    = { level = "deny", priority = -1 }
@@ -73,7 +67,7 @@ must_use_candidate      = "allow"
 similar_names           = "allow"
 missing_errors_doc      = "allow"
 
-[workspace.lints.rustdoc]
+[lints.rustdoc]
 all = "deny"
 missing_crate_level_docs = "deny"
 broken_intra_doc_links   = "deny"
