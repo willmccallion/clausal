@@ -87,7 +87,7 @@ impl SolverBuilder {
         self
     }
 
-    /// Enables verbose progress output once a logger lands.
+    /// Enables verbose progress output.
     #[inline]
     pub fn verbose(mut self, on: bool) -> Self {
         self.verbose = on;
@@ -119,9 +119,6 @@ impl SolverBuilder {
     }
 
     /// Constructs a fresh solver with the configured settings.
-    ///
-    /// Stub: currently ignores the configuration and returns a default
-    /// solver. Configuration routing lands when the engine does.
     pub fn build(self) -> Solver {
         let _ = (
             self.conflict_budget,

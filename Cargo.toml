@@ -55,7 +55,7 @@ opt-level = 3
 missing_docs = "warn"
 missing_debug_implementations = "warn"
 unused_results = "deny"
-unsafe_code = "forbid"
+unsafe_code = "deny"
 rust_2018_idioms = { level = "deny", priority = -1 }
 
 [workspace.lints.clippy]

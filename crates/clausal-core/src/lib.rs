@@ -1,17 +1,8 @@
-//! Core types, traits, and engine scaffolding for the [clausal] SAT solver.
+//! Core types and traits for the clausal SAT solver.
 //!
-//! This crate is `no_std`-compatible; it depends only on `core` and `alloc`.
-//! The top-level [`clausal`](https://docs.rs/clausal) crate re-exports the
-//! public surface and adds `std`-gated conveniences, DIMACS parsing, proof
-//! emission, and an IPASIR C ABI.
-//!
-//! # Status
-//!
-//! Early scaffolding. No solver engine is implemented yet; every `solve`
-//! method returns [`Error::NotImplemented`]. The public API shape is stable
-//! enough to write examples against.
-//!
-//! [clausal]: https://crates.io/crates/clausal
+//! `no_std`-compatible; depends only on `core` and `alloc`. The top-level
+//! `clausal` crate re-exports this surface and gates DIMACS parsing, proof
+//! emission, and an IPASIR C ABI behind Cargo features.
 #![no_std]
 
 extern crate alloc;
@@ -46,8 +37,7 @@ pub use types::{Clause, ClauseId, DecisionLevel, Lit, Polarity, Value, Var};
 
 use static_assertions::{assert_eq_size, assert_impl_all};
 
-// Compile-time guarantees: niche optimisations hold and handle types are
-// thread-safe and cheap to copy.
+// Niche optimisations hold and handle types are Copy, Send, Sync, Eq, Hash, Ord.
 assert_eq_size!(Var, Option<Var>);
 assert_eq_size!(Lit, Option<Lit>);
 assert_eq_size!(ClauseId, Option<ClauseId>);

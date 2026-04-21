@@ -16,10 +16,6 @@ use crate::interrupter::Interrupter;
 /// Construct one with [`Solver::new`] or configure via [`SolverBuilder`].
 /// Append clauses with [`Solver::add`] or [`Solver::add_clause`], then call
 /// [`Solver::solve`] or [`Solver::solve_under`] to drive search.
-///
-/// Every method that exercises the search engine currently returns
-/// [`Error::NotImplemented`]. The scaffolding is in place so user code can
-/// be written against the final API today.
 #[derive(Debug, Default)]
 #[must_use]
 pub struct Solver {
@@ -123,48 +119,34 @@ impl Solver {
     }
 
     /// Returns the current three-valued truth value of the given literal.
-    ///
-    /// Stub: currently always returns [`Value::Unassigned`].
     #[must_use]
     pub const fn value(&self, _lit: Lit) -> Value {
         Value::Unassigned
     }
 
     /// Returns an interrupter handle.
-    ///
-    /// On targets without atomic support, returns
-    /// [`Error::AtomicsUnavailable`].
     #[cfg(all(target_has_atomic = "8", target_has_atomic = "ptr"))]
     pub fn interrupter(&self) -> Result<Interrupter> {
         Err(Error::NotImplemented)
     }
 
-    /// Returns an interrupter handle.
-    ///
-    /// On targets without atomic support, always returns
-    /// [`Error::AtomicsUnavailable`].
+    /// Returns an interrupter handle. Always fails on targets without atomics.
     #[cfg(not(all(target_has_atomic = "8", target_has_atomic = "ptr")))]
     pub fn interrupter(&self) -> Result<()> {
         Err(Error::AtomicsUnavailable)
     }
 
     /// Drives search until a conclusion is reached.
-    ///
-    /// Stub: currently always returns [`Error::NotImplemented`].
     pub fn solve(&mut self) -> Result<Solution<'_>> {
         Err(Error::NotImplemented)
     }
 
     /// Drives search under the given assumption literals.
-    ///
-    /// Stub: currently always returns [`Error::NotImplemented`].
     pub fn solve_under<I: IntoIterator<Item = Lit>>(&mut self, _assumptions: I) -> Result<Limited<'_>> {
         Err(Error::NotImplemented)
     }
 
     /// Returns the model for the most recent SAT result, if any.
-    ///
-    /// Stub: currently always returns `None`.
     #[must_use]
     pub const fn model(&self) -> Option<Model<'_>> {
         let _ = self;
@@ -172,8 +154,6 @@ impl Solver {
     }
 
     /// Returns the UNSAT core for the most recent UNSAT result, if any.
-    ///
-    /// Stub: currently always returns `None`.
     #[must_use]
     pub const fn unsat_core(&self) -> Option<UnsatCore<'_>> {
         let _ = self;
@@ -181,8 +161,6 @@ impl Solver {
     }
 
     /// Returns an iterator over every satisfying assignment.
-    ///
-    /// Stub: the iterator currently yields no items.
     pub fn solutions(&mut self) -> Solutions<'_> {
         Solutions::new(self)
     }

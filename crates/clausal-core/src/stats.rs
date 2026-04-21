@@ -3,8 +3,7 @@
 /// Counters and timings accumulated by the solver during a run.
 ///
 /// All fields are monotone over the lifetime of a [`Solver`]; a restart
-/// does not clear them. Future counters may be added; this type is
-/// `#[non_exhaustive]` to keep additions non-breaking.
+/// does not clear them.
 ///
 /// [`Solver`]: crate::solver::Solver
 #[non_exhaustive]

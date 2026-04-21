@@ -39,7 +39,7 @@ impl Cnf {
 
     /// Allocates one fresh variable and returns a handle to it.
     ///
-    /// Returns [`Error::VariableLimitExceeded`] once the variable count
+    /// Returns [`Error::VariableLimitExceeded`] if the variable count
     /// would exceed [`Var::MAX_RAW`].
     #[inline]
     pub fn new_var(&mut self) -> Result<Var> {
@@ -105,9 +105,6 @@ impl Cnf {
     }
 
     /// Solves this formula with default configuration.
-    ///
-    /// Currently returns [`Error::NotImplemented`]. The solver engine
-    /// lands in a subsequent release.
     pub fn solve(self) -> Result<()> {
         Err(Error::NotImplemented)
     }

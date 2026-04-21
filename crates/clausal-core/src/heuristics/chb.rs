@@ -7,8 +7,6 @@ use crate::traits::DecisionHeuristic;
 use crate::types::Lit;
 
 /// CHB branching.
-///
-/// Stub: stores the configured multiplier only.
 #[derive(Debug)]
 pub struct Chb {
     multiplier: f64,

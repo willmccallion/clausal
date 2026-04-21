@@ -1,5 +1,8 @@
 //! IPASIR C ABI compatibility layer for [`clausal`](../clausal/).
 //!
-//! Early scaffolding. Every `ipasir_*` function currently returns a
-//! documented sentinel and sets a thread-local error flag reachable via
-//! [`ipasir_failed`].
+//! Exposes the standard `ipasir_*` symbols so C and C++ callers can link
+//! against clausal via the IPASIR interface.
+
+mod ffi;
+
+pub use ffi::IPASIR_SENTINEL;

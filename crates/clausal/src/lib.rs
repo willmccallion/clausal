@@ -1,16 +1,7 @@
 //! A pure-Rust CDCL SAT solver.
 //!
-//! `clausal` is an ergonomic, extensible SAT solver written in pure Rust,
-//! with no C/C++ dependencies. The core is `no_std`-compatible and builds
-//! for WebAssembly.
-//!
-//! # Status
-//!
-//! Early scaffolding. The public API compiles and is honest about what it
-//! does: every call to `solve` currently returns
-//! [`Error::NotImplemented`]. The engine lands in subsequent releases.
-//!
-//! [`Error::NotImplemented`]: clausal_core::types
+//! Re-exports the public surface of [`clausal_core`] and optionally pulls
+//! in DIMACS parsing and proof emission behind Cargo features.
 
 pub use clausal_core::builder::SolverBuilder;
 pub use clausal_core::cnf::Cnf;

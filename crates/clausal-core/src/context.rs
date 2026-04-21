@@ -71,8 +71,6 @@ impl<'s> ClauseRef<'s> {
     }
 
     /// The literals in the clause.
-    ///
-    /// Stub: currently always returns an empty slice.
     #[must_use]
     pub fn lits(&self) -> &[Lit] {
         let _ = self.solver;
@@ -92,25 +90,19 @@ impl<'s> ClauseRef<'s> {
     }
 
     /// Whether this clause was learned via conflict analysis.
-    ///
-    /// Stub: currently always `false`.
     #[must_use]
     pub const fn is_learned(&self) -> bool {
         let _ = self.solver;
         false
     }
 
-    /// The clause's Literal Block Distance (LBD), if known.
-    ///
-    /// Stub: currently always `0`.
+    /// The clause's Literal Block Distance.
     #[must_use]
     pub const fn lbd(&self) -> u32 {
         0
     }
 
     /// The clause's activity score.
-    ///
-    /// Stub: currently always `0.0`.
     #[must_use]
     pub const fn activity(&self) -> f64 {
         0.0

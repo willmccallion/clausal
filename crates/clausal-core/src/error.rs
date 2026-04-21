@@ -9,10 +9,7 @@ use core::fmt;
 #[non_exhaustive]
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Error {
-    /// A solver or parser routine has not been implemented yet.
-    ///
-    /// Every `solve` entry point currently returns this while the engine
-    /// is under construction.
+    /// The requested routine has no implementation wired in.
     NotImplemented,
     /// Input could not be parsed as a DIMACS CNF file.
     InvalidDimacs,

@@ -9,7 +9,7 @@ use crate::traits::{PreprocessResult, Preprocessor};
 
 /// A sequence of preprocessors invoked in order.
 ///
-/// Stops early on [`PreprocessResult::Unsat`].
+/// Stops on [`PreprocessResult::Unsat`].
 #[derive(Default)]
 pub struct Pipeline {
     stages: Vec<Box<dyn Preprocessor>>,

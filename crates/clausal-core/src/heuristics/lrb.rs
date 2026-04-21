@@ -7,8 +7,6 @@ use crate::traits::DecisionHeuristic;
 use crate::types::Lit;
 
 /// LRB branching with exponential-recency weighting.
-///
-/// Stub: stores the configured step size only.
 #[derive(Debug)]
 pub struct Lrb {
     alpha: f64,

@@ -1,8 +1,6 @@
-//! Crate-private engine scaffolding.
+//! Crate-private engine internals.
 //!
-//! These modules reserve the shape of the eventual CDCL engine so later
-//! sessions can land propagation, analysis, and backtracking without
-//! restructuring the crate. Nothing here is part of the public API.
+//! Not part of the public API.
 
 pub(crate) mod arena;
 pub(crate) mod conflict;

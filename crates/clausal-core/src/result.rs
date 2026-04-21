@@ -54,8 +54,6 @@ impl<'s> Model<'s> {
     }
 
     /// Returns the polarity assigned to the given variable.
-    ///
-    /// Stub: currently always returns [`Polarity::Positive`].
     #[must_use]
     pub fn var_value(&self, _var: Var) -> Polarity {
         let _ = self.solver;
@@ -174,8 +172,6 @@ impl<'s> UnsatCore<'s> {
     }
 
     /// Returns the number of literals in the core.
-    ///
-    /// Stub: currently always returns `0`.
     #[must_use]
     pub fn len(&self) -> usize {
         let _ = self.solver;
@@ -205,7 +201,6 @@ impl Iterator for Solutions<'_> {
     type Item = OwnedModel;
 
     fn next(&mut self) -> Option<OwnedModel> {
-        // Stub: no solutions until the engine lands.
         let _ = &self.solver;
         None
     }

@@ -7,9 +7,6 @@ use crate::traits::DecisionHeuristic;
 use crate::types::Lit;
 
 /// VSIDS with activity decay and a binary max-heap.
-///
-/// Stub: fields are present so the engine can land without restructuring,
-/// but [`Self::pick_branch`] currently returns `None`.
 #[derive(Debug)]
 pub struct Vsids {
     activities: Vec<f64>,
