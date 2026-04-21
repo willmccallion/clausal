@@ -106,6 +106,15 @@ impl<'a> IntoIterator for &'a Clause {
     }
 }
 
+impl IntoIterator for Clause {
+    type Item = Lit;
+    type IntoIter = alloc::vec::IntoIter<Lit>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.lits.into_iter()
+    }
+}
+
 impl FromIterator<Lit> for Clause {
     fn from_iter<I: IntoIterator<Item = Lit>>(iter: I) -> Self {
         Self::from_lits(iter)

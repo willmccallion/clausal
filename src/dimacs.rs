@@ -98,6 +98,13 @@ impl Parser {
 }
 
 fn parse_header(rest: &str) -> Result<Cnf> {
+    let (n, m) = parse_header_counts(rest)?;
+    let mut cnf = Cnf::with_capacity(m);
+    let _ = cnf.new_vars(n as usize)?;
+    Ok(cnf)
+}
+
+fn parse_header_counts(rest: &str) -> Result<(u32, usize)> {
     let mut parts = rest.split_ascii_whitespace();
     let kind = parts.next().ok_or(Error::InvalidDimacs)?;
     if kind != "cnf" {
@@ -113,9 +120,69 @@ fn parse_header(rest: &str) -> Result<Cnf> {
         .ok_or(Error::InvalidDimacs)?
         .parse()
         .map_err(|_| Error::InvalidDimacs)?;
-    let mut cnf = Cnf::with_capacity(m);
-    let _ = cnf.new_vars(n as usize)?;
-    Ok(cnf)
+    Ok((n, m))
+}
+
+/// Streams DIMACS CNF from a reader directly into an existing solver,
+/// without building an intermediate [`Cnf`].
+///
+/// Used by [`crate::SolverBuilder::build_from_reader`]. Shares the header
+/// parsing, comment skipping, and `%` EOF semantics with
+/// [`Parser::parse_reader`], but each clause is installed into the solver
+/// as soon as its terminating `0` is seen, reusing one literal buffer.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidDimacs`] on malformed input, [`Error::Io`] on
+/// I/O failure.
+pub(crate) fn stream_into_solver<R: Read>(
+    reader: R,
+    solver: &mut crate::Solver,
+) -> Result<()> {
+    let mut buf = BufReader::new(reader);
+    let mut line = String::new();
+    let mut pending: Vec<Lit> = Vec::new();
+    let mut header_seen = false;
+    loop {
+        line.clear();
+        let n = buf.read_line(&mut line).map_err(|_| Error::Io)?;
+        if n == 0 {
+            break;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('c') {
+            continue;
+        }
+        if trimmed.starts_with('%') {
+            break;
+        }
+        if let Some(rest) = trimmed.strip_prefix("p ") {
+            let (n_vars, _m) = parse_header_counts(rest.trim())?;
+            solver.reserve_vars(n_vars);
+            header_seen = true;
+            continue;
+        }
+        if !header_seen {
+            return Err(Error::InvalidDimacs);
+        }
+        for tok in trimmed.split_ascii_whitespace() {
+            let value: i32 = tok.parse().map_err(|_| Error::InvalidDimacs)?;
+            if value == 0 {
+                solver.add_lits(&pending);
+                pending.clear();
+            } else {
+                let lit = Lit::from_dimacs(value).ok_or(Error::InvalidDimacs)?;
+                pending.push(lit);
+            }
+        }
+    }
+    if !pending.is_empty() {
+        return Err(Error::InvalidDimacs);
+    }
+    if !header_seen {
+        return Err(Error::InvalidDimacs);
+    }
+    Ok(())
 }
 
 fn ensure_vars_for(cnf: &mut Cnf, lit: Lit) -> Result<()> {

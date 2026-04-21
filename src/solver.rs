@@ -30,15 +30,15 @@ use crate::interrupter::Interrupter;
 #[derive(Debug, Default)]
 #[must_use]
 pub struct Solver {
-    pending: Vec<Clause>,
     state: SolverState,
+    scratch_lits: Vec<Lit>,
 }
 
 impl Solver {
     /// Creates a solver with default configuration.
     #[inline]
     pub const fn new() -> Self {
-        Self { pending: Vec::new(), state: SolverState::new() }
+        Self { state: SolverState::new(), scratch_lits: Vec::new() }
     }
 
     /// Returns a builder for configuring a new solver.
@@ -66,14 +66,52 @@ impl Solver {
         Ok(out)
     }
 
+    /// Grows internal per-variable storage to hold at least `num_vars` vars.
+    ///
+    /// Called by [`SolverBuilder::build_from`] and the DIMACS streaming
+    /// parser so the per-literal tables are sized once up front rather than
+    /// reallocated repeatedly as clauses arrive.
+    pub(crate) fn reserve_vars(&mut self, num_vars: u32) {
+        self.state.grow_to(num_vars);
+    }
+
     /// Appends a clause built from an iterator of literals.
+    ///
+    /// Clauses are installed into the solver immediately. If a non-trivial
+    /// trail is in place from a prior solve, it is popped back to the ground
+    /// level first so the new clause is incorporated cleanly on the next
+    /// solve call.
     pub fn add<I: IntoIterator<Item = Lit>>(&mut self, lits: I) {
-        self.pending.push(Clause::from_lits(lits));
+        self.scratch_lits.clear();
+        self.scratch_lits.extend(lits);
+        self.install_scratch();
     }
 
     /// Appends an already-built clause.
+    ///
+    /// See [`Self::add`] for installation semantics.
     pub fn add_clause(&mut self, clause: Clause) {
-        self.pending.push(clause);
+        self.add(clause);
+    }
+
+    /// Appends a clause from a literal slice without allocating an owned
+    /// `Clause`. Used by the DIMACS streaming path to avoid intermediate
+    /// `Vec<Lit>` allocations per clause.
+    pub(crate) fn add_lits(&mut self, lits: &[Lit]) {
+        if !self.state.assignment.current_level().is_ground() {
+            self.state.assignment.pop_to(DecisionLevel::GROUND);
+        }
+        self.state.install_user_clause(lits);
+    }
+
+    fn install_scratch(&mut self) {
+        if !self.state.assignment.current_level().is_ground() {
+            self.state.assignment.pop_to(DecisionLevel::GROUND);
+        }
+        let lits = core::mem::take(&mut self.scratch_lits);
+        self.state.install_user_clause(&lits);
+        self.scratch_lits = lits;
+        self.scratch_lits.clear();
     }
 
     /// Returns the number of variables known to the solver.
@@ -92,11 +130,14 @@ impl Solver {
         self.state.enable_inprocessing = on;
     }
 
-    /// Returns the number of clauses currently held by the solver.
+    /// Returns the number of long (>=3 literal) clauses currently stored in
+    /// the solver's arena. Binary clauses live in the watch tables and unit
+    /// clauses live on the trail, so this count is a lower bound on the
+    /// total number of installed clauses.
     #[inline]
     #[must_use]
     pub fn num_clauses(&self) -> usize {
-        self.pending.len() + self.state.arena.num_clauses()
+        self.state.arena.num_clauses()
     }
 
     /// Returns the solver's accumulated statistics.
@@ -166,7 +207,6 @@ impl Solver {
     /// failures and future resource guards.
     pub fn solve(&mut self) -> Result<Solution<'_>> {
         self.state.reset_search_state();
-        self.drain_pending();
         let outcome = self.state.solve();
         match outcome {
             SearchOutcome::Sat => Ok(Solution::Sat(Model::new(self))),
@@ -187,7 +227,6 @@ impl Solver {
         assumptions: I,
     ) -> Result<Limited<'_>> {
         self.state.reset_search_state();
-        self.drain_pending();
         let assumptions: Vec<Lit> = assumptions.into_iter().collect();
         let (outcome, reason) = self.state.solve_under(&assumptions);
         Ok(match outcome {
@@ -236,13 +275,6 @@ impl Solver {
         &self.state.last_core
     }
 
-    fn drain_pending(&mut self) {
-        let pending = core::mem::take(&mut self.pending);
-        for clause in &pending {
-            let lits: Vec<Lit> = clause.iter().copied().collect();
-            self.state.install_user_clause(&lits);
-        }
-    }
 }
 
 #[cfg(test)]

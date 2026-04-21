@@ -43,7 +43,6 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use clausal::dimacs::Parser;
 use clausal::{Interrupter, Limited, Solver, Statistics};
 
 struct Args {
@@ -187,14 +186,10 @@ fn run_one<W: Write>(
     out: &mut W,
 ) -> Result<u64, String> {
     let file = File::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
-    let cnf = Parser::new()
-        .parse_reader(file)
-        .map_err(|e| format!("parse {}: {e:?}", path.display()))?;
-
     let mut solver = Solver::builder()
         .enable_inprocessing(args.inprocess)
-        .build_from(&cnf)
-        .map_err(|e| format!("build {}: {e:?}", path.display()))?;
+        .build_from_reader(file)
+        .map_err(|e| format!("parse/build {}: {e:?}", path.display()))?;
 
     let interrupter = solver
         .interrupter()

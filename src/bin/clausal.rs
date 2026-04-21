@@ -33,7 +33,6 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use clausal::dimacs::Parser;
 use clausal::{
     Error, Interrupter, InterruptReason, Limited, Polarity, Solver, Var,
 };
@@ -115,22 +114,18 @@ fn run() -> Result<u8, String> {
 
     let file = File::open(&args.path)
         .map_err(|e| format!("cannot open {}: {e}", args.path.display()))?;
-    let cnf = Parser::new()
-        .parse_reader(file)
+    let mut solver = Solver::builder()
+        .enable_inprocessing(args.inprocess)
+        .build_from_reader(file)
         .map_err(|e| format!("parse error in {}: {e:?}", args.path.display()))?;
 
     if !args.quiet {
         println!(
             "c clausal: {} vars, {} clauses",
-            cnf.num_vars(),
-            cnf.clauses().count()
+            solver.num_vars(),
+            solver.num_clauses(),
         );
     }
-
-    let mut solver = Solver::builder()
-        .enable_inprocessing(args.inprocess)
-        .build_from(&cnf)
-        .map_err(|e| format!("failed to build solver: {e:?}"))?;
 
     let interrupter = solver
         .interrupter()

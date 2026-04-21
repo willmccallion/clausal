@@ -156,10 +156,32 @@ impl SolverBuilder {
     /// Constructs a solver seeded with the given formula.
     pub fn build_from(self, cnf: &Cnf) -> Result<Solver> {
         let mut solver = self.build();
-        let _ = cnf.num_vars();
+        solver.reserve_vars(cnf.num_vars());
         for clause in cnf.clauses() {
-            solver.add_clause(clause.clone());
+            solver.add_lits(clause.as_slice());
         }
+        Ok(solver)
+    }
+
+    /// Constructs a solver seeded by streaming DIMACS directly from a
+    /// `Read` source.
+    ///
+    /// Identical in effect to calling [`crate::dimacs::Parser::parse_reader`]
+    /// followed by [`Self::build_from`], but without the intermediate
+    /// [`Cnf`] allocation: each clause is handed straight to the solver's
+    /// arena via a single reusable literal buffer. Peak memory during
+    /// construction is roughly one copy of the clause data instead of
+    /// three, which matters on large CNFs with tens of millions of
+    /// clauses.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::InvalidDimacs`] on malformed input or
+    /// [`crate::Error::Io`] on I/O failure.
+    #[cfg(feature = "dimacs")]
+    pub fn build_from_reader<R: std::io::Read>(self, reader: R) -> Result<Solver> {
+        let mut solver = self.build();
+        crate::dimacs::stream_into_solver(reader, &mut solver)?;
         Ok(solver)
     }
 }
