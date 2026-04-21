@@ -9,15 +9,14 @@ repository = "https://github.com/willmccallion/clausal"
 homepage = "https://github.com/willmccallion/clausal"
 description = "A pure-Rust CDCL SAT solver with a no_std-friendly core, a pluggable-trait API, and WASM support."
 readme = "README.md"
-categories = ["algorithms", "mathematics", "no-std", "wasm"]
+categories = ["algorithms", "mathematics", "no-std"]
 keywords = ["sat", "solver", "cdcl", "satisfiability", "logic"]
 
 [features]
-default = []
+default = ["std", "dimacs"]
 std = []
-dimacs = ["std"]
-proofs = []
-wasm = []
+dimacs = ["std"]        # DIMACS parser needs Read/Write from std
+proofs = ["std"]        # proof writers need Write from std
 
 [dependencies]
 static_assertions = "1.1"

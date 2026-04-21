@@ -8,13 +8,13 @@ search engine is not yet implemented. Most solver calls return
 
 ## Features
 
-The crate is `no_std` by default and depends only on `core` and `alloc`.
-All std-using functionality is opt-in.
+The crate's core is `no_std` and depends only on `core` and `alloc`.
+The default build enables `std` and DIMACS support; drop default features
+for a pure `no_std` + `alloc` build.
 
 - `std` — enables std-dependent code paths
 - `dimacs` — DIMACS CNF parser and writer (implies `std`)
-- `proofs` — DRAT / LRAT / FRAT writers
-- `wasm` — marker for `wasm32-unknown-unknown` builds
+- `proofs` — DRAT / LRAT / FRAT writers (implies `std`)
 
 ## Usage
 
