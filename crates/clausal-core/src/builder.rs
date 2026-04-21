@@ -1,15 +1,17 @@
 //! [`SolverBuilder`]: configure a solver before constructing it.
 
+use alloc::boxed::Box;
+
 use crate::cnf::Cnf;
 use crate::error::Result;
 use crate::solver::Solver;
+use crate::traits::{ClauseDeletion, DecisionHeuristic, Preprocessor, RestartStrategy};
 
 /// Fluent configuration builder for a [`Solver`].
 ///
-/// Non-heuristic settings are stored here until [`Self::build`] constructs
-/// the actual solver. Heuristic, restart, clause-deletion, and preprocessor
-/// slots are added in a later commit once the relevant traits exist.
-#[derive(Default, Debug)]
+/// Non-heuristic settings and pluggable extension traits are stored here
+/// until [`Self::build`] constructs the actual solver.
+#[derive(Default)]
 #[must_use]
 pub struct SolverBuilder {
     conflict_budget: Option<u64>,
@@ -17,6 +19,26 @@ pub struct SolverBuilder {
     timeout_ms: Option<u64>,
     chrono_gap: Option<u32>,
     verbose: bool,
+    decision: Option<Box<dyn DecisionHeuristic>>,
+    restart: Option<Box<dyn RestartStrategy>>,
+    deletion: Option<Box<dyn ClauseDeletion>>,
+    preprocessor: Option<Box<dyn Preprocessor>>,
+}
+
+impl core::fmt::Debug for SolverBuilder {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SolverBuilder")
+            .field("conflict_budget", &self.conflict_budget)
+            .field("propagation_budget", &self.propagation_budget)
+            .field("timeout_ms", &self.timeout_ms)
+            .field("chrono_gap", &self.chrono_gap)
+            .field("verbose", &self.verbose)
+            .field("decision", &self.decision.as_ref().map(|d| d.name()))
+            .field("restart", &self.restart.as_ref().map(|r| r.name()))
+            .field("deletion", &self.deletion.as_ref().map(|d| d.name()))
+            .field("preprocessor", &self.preprocessor.as_ref().map(|p| p.name()))
+            .finish()
+    }
 }
 
 impl SolverBuilder {
@@ -30,6 +52,10 @@ impl SolverBuilder {
             timeout_ms: None,
             chrono_gap: None,
             verbose: false,
+            decision: None,
+            restart: None,
+            deletion: None,
+            preprocessor: None,
         }
     }
 
@@ -61,10 +87,34 @@ impl SolverBuilder {
         self
     }
 
-    /// Enables verbose progress output (once a logger lands).
+    /// Enables verbose progress output once a logger lands.
     #[inline]
     pub fn verbose(mut self, on: bool) -> Self {
         self.verbose = on;
+        self
+    }
+
+    /// Installs a decision heuristic.
+    pub fn with_decision_heuristic<H: DecisionHeuristic>(mut self, heuristic: H) -> Self {
+        self.decision = Some(Box::new(heuristic));
+        self
+    }
+
+    /// Installs a restart strategy.
+    pub fn with_restart_strategy<R: RestartStrategy>(mut self, strategy: R) -> Self {
+        self.restart = Some(Box::new(strategy));
+        self
+    }
+
+    /// Installs a learned-clause deletion policy.
+    pub fn with_clause_deletion<D: ClauseDeletion>(mut self, policy: D) -> Self {
+        self.deletion = Some(Box::new(policy));
+        self
+    }
+
+    /// Installs a preprocessor pipeline.
+    pub fn with_preprocessor<P: Preprocessor>(mut self, preprocessor: P) -> Self {
+        self.preprocessor = Some(Box::new(preprocessor));
         self
     }
 
@@ -79,19 +129,20 @@ impl SolverBuilder {
             self.timeout_ms,
             self.chrono_gap,
             self.verbose,
+            self.decision,
+            self.restart,
+            self.deletion,
+            self.preprocessor,
         );
         Solver::new()
     }
 
     /// Constructs a solver seeded with the given formula.
-    ///
-    /// Stub: currently appends every clause from the CNF and returns the
-    /// bare solver.
     pub fn build_from(self, cnf: Cnf) -> Result<Solver> {
         let mut solver = self.build();
         let _ = cnf.num_vars();
-        for _clause in cnf.clauses() {
-            solver.add_clause(_clause.clone());
+        for clause in cnf.clauses() {
+            solver.add_clause(clause.clone());
         }
         Ok(solver)
     }
@@ -100,10 +151,20 @@ impl SolverBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::heuristics::Vsids;
+    use crate::restarts::Luby;
 
     #[test]
     fn build_returns_empty_solver() {
         let s = SolverBuilder::new().with_timeout_ms(100).build();
         assert_eq!(s.num_vars(), 0);
+    }
+
+    #[test]
+    fn install_trait_objects() {
+        let _ = SolverBuilder::new()
+            .with_decision_heuristic(Vsids::default())
+            .with_restart_strategy(Luby::default())
+            .build();
     }
 }

@@ -19,12 +19,17 @@ extern crate alloc;
 pub mod builder;
 pub mod cnf;
 pub mod context;
+pub mod deletion;
 pub mod error;
+pub mod heuristics;
 #[cfg(all(target_has_atomic = "8", target_has_atomic = "ptr"))]
 pub mod interrupter;
+pub mod preprocessors;
+pub mod restarts;
 pub mod result;
 pub mod solver;
 pub mod stats;
+pub mod traits;
 pub mod types;
 
 pub use builder::SolverBuilder;
