@@ -27,6 +27,11 @@ use crate::types::{ClauseId, DecisionLevel, Lit, Var};
 /// so future bumps weigh more than past ones.
 const VAR_DECAY: f64 = 0.95;
 
+/// Minimum level-gap between a conflict's level and its backjump target
+/// before chronological backtracking takes over. Below the gap the solver
+/// does a classical non-chronological jump to the asserting level.
+const CHRONO_LEVEL_GAP: u32 = 100;
+
 /// Mutable state reused across iterations of the CDCL main loop.
 ///
 /// Owning every `Vec` across iterations keeps the hot loop allocation-free.
@@ -51,6 +56,7 @@ pub(crate) struct SearchScratch {
     pub(crate) rephase: RephaseState,
     pub(crate) rephases: u64,
     pub(crate) mode: ModeState,
+    pub(crate) chrono_backtracks: u64,
 }
 
 impl SearchScratch {
@@ -74,6 +80,7 @@ impl SearchScratch {
             rephase: RephaseState::new(),
             rephases: 0,
             mode: ModeState::new(),
+            chrono_backtracks: 0,
         }
     }
 
@@ -145,8 +152,12 @@ pub(crate) fn solve_loop(
             scratch
                 .restart
                 .record_conflict(f64::from(lbd), peak_trail_len as f64);
-            reinsert_from_trail(assignment, &mut scratch.heap, &scratch.activities, backjump);
-            backtrack_to(assignment, backjump);
+            let target = chrono_target(conflict_level, backjump);
+            if target.get() > backjump.get() {
+                scratch.chrono_backtracks = scratch.chrono_backtracks.saturating_add(1);
+            }
+            reinsert_from_trail(assignment, &mut scratch.heap, &scratch.activities, target);
+            backtrack_to(assignment, target);
             install_learned(
                 arena,
                 assignment,
@@ -154,7 +165,7 @@ pub(crate) fn solve_loop(
                 bin_watchers,
                 learned_clauses,
                 &scratch.learned,
-                backjump,
+                target,
             );
             #[allow(clippy::cast_precision_loss)]
             let restart_candidate = scratch.restart.should_restart(peak_trail_len as f64);
@@ -235,6 +246,24 @@ fn install_learned(
             let asserting = learned[0];
             assignment.assign(asserting, Reason::long(id), backjump);
         }
+    }
+}
+
+/// Picks the level to backtrack to.
+///
+/// Non-chronological backjumps go straight to `backjump`. Deep
+/// chronological backtracks instead unwind a single decision: when the
+/// conflict level exceeds the backjump level by more than
+/// [`CHRONO_LEVEL_GAP`], target `conflict_level - 1`. The asserting literal
+/// is then installed at that higher target level instead of at its true
+/// implication level, trading theoretical optimality for trail stability.
+fn chrono_target(conflict_level: DecisionLevel, backjump: DecisionLevel) -> DecisionLevel {
+    let c = conflict_level.get();
+    let b = backjump.get();
+    if c > b.saturating_add(CHRONO_LEVEL_GAP) {
+        DecisionLevel::new(c.saturating_sub(1))
+    } else {
+        backjump
     }
 }
 
@@ -453,6 +482,28 @@ mod tests {
             "expected at least one restart (conflicts={})",
             h.scratch.conflicts,
         );
+    }
+
+    #[test]
+    fn chrono_target_within_gap_uses_backjump() {
+        let target = chrono_target(DecisionLevel::new(50), DecisionLevel::new(5));
+        assert_eq!(target, DecisionLevel::new(5));
+    }
+
+    #[test]
+    fn chrono_target_beyond_gap_targets_conflict_minus_one() {
+        let conflict = DecisionLevel::new(CHRONO_LEVEL_GAP + 10);
+        let backjump = DecisionLevel::new(5);
+        let target = chrono_target(conflict, backjump);
+        assert_eq!(target, DecisionLevel::new(CHRONO_LEVEL_GAP + 9));
+    }
+
+    #[test]
+    fn chrono_target_exactly_at_gap_uses_backjump() {
+        let conflict = DecisionLevel::new(CHRONO_LEVEL_GAP);
+        let backjump = DecisionLevel::GROUND;
+        let target = chrono_target(conflict, backjump);
+        assert_eq!(target, DecisionLevel::GROUND);
     }
 
     #[test]
