@@ -149,6 +149,35 @@ impl Lit {
         // `Lit`'s encoding starts at 2 (Var 1 positive), so subtract 2.
         (self.0.get() - 2) as usize
     }
+
+    /// Returns the raw nonzero encoding: `(var.to_raw() << 1) | polarity_bit`.
+    ///
+    /// Solver-internal use only.
+    #[inline]
+    #[must_use]
+    pub(crate) const fn to_raw(self) -> u32 {
+        self.0.get()
+    }
+
+    /// Rebuilds a literal from a raw word produced by [`Self::to_raw`].
+    ///
+    /// Returns `None` if `raw` does not encode a valid literal (values below
+    /// `2` or with a variable portion outside `1..=Var::MAX_RAW`).
+    #[inline]
+    #[must_use]
+    pub(crate) const fn from_raw(raw: u32) -> Option<Self> {
+        if raw < 2 {
+            return None;
+        }
+        let var_raw = raw >> 1;
+        if Var::new(var_raw).is_none() {
+            return None;
+        }
+        match NonZeroU32::new(raw) {
+            Some(n) => Some(Self(n)),
+            None => None,
+        }
+    }
 }
 
 impl Not for Lit {
