@@ -1,5 +1,6 @@
 //! [`Solver`]: the incremental CDCL solver entry point.
 
+pub(crate) mod mode;
 pub(crate) mod order_heap;
 pub(crate) mod reduce;
 pub(crate) mod rephase;

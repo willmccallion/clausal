@@ -13,6 +13,7 @@ use crate::internal::arena::ClauseArena;
 use crate::internal::reason::Reason;
 use crate::internal::trail::Assignment;
 use crate::internal::watcher::{attach_binary, attach_long, BinaryWatchers, LongWatchers};
+use crate::solver::mode::ModeState;
 use crate::solver::order_heap::OrderHeap;
 use crate::solver::reduce::{compact, reduce_learned, ReduceState};
 use crate::solver::rephase::RephaseState;
@@ -49,6 +50,7 @@ pub(crate) struct SearchScratch {
     pub(crate) compactions: u64,
     pub(crate) rephase: RephaseState,
     pub(crate) rephases: u64,
+    pub(crate) mode: ModeState,
 }
 
 impl SearchScratch {
@@ -71,6 +73,7 @@ impl SearchScratch {
             compactions: 0,
             rephase: RephaseState::new(),
             rephases: 0,
+            mode: ModeState::new(),
         }
     }
 
@@ -154,10 +157,12 @@ pub(crate) fn solve_loop(
                 backjump,
             );
             #[allow(clippy::cast_precision_loss)]
-            let restart = scratch.restart.should_restart(peak_trail_len as f64);
+            let restart_candidate = scratch.restart.should_restart(peak_trail_len as f64);
+            let restart = restart_candidate && !scratch.mode.is_stable();
             let reduce = scratch.reduce.should_reduce(scratch.conflicts);
             let rephase = scratch.rephase.should_rephase(scratch.conflicts);
-            if restart || reduce || rephase {
+            let mode_switch = scratch.mode.should_switch(scratch.conflicts);
+            if restart || reduce || rephase || mode_switch {
                 reinsert_from_trail(
                     assignment,
                     &mut scratch.heap,
@@ -182,6 +187,9 @@ pub(crate) fn solve_loop(
                 if rephase {
                     scratch.rephase.apply(assignment, scratch.conflicts);
                     scratch.rephases = scratch.rephases.saturating_add(1);
+                }
+                if mode_switch {
+                    scratch.mode.switch(assignment, scratch.conflicts);
                 }
             }
         } else if let Some(var) = pick_branching_var(&mut scratch.heap, &scratch.activities, assignment) {
