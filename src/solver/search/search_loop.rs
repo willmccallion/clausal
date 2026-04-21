@@ -57,6 +57,11 @@ pub(crate) struct SearchScratch {
     pub(crate) rephases: u64,
     pub(crate) mode: ModeState,
     pub(crate) chrono_backtracks: u64,
+    /// Variables eliminated by resolution-based BVE. Indexed by
+    /// `Var::index()`. Branching skips any variable flagged here so the
+    /// search never decides on a variable whose clauses have all been
+    /// resolved away.
+    pub(crate) eliminated: Vec<bool>,
 }
 
 impl SearchScratch {
@@ -81,6 +86,7 @@ impl SearchScratch {
             rephases: 0,
             mode: ModeState::new(),
             chrono_backtracks: 0,
+            eliminated: Vec::new(),
         }
     }
 
@@ -89,6 +95,9 @@ impl SearchScratch {
     pub(crate) fn grow_to(&mut self, num_vars: usize) {
         if self.activities.len() < num_vars {
             self.activities.resize(num_vars, 0.0);
+        }
+        if self.eliminated.len() < num_vars {
+            self.eliminated.resize(num_vars, false);
         }
         self.heap.grow_to(num_vars);
         #[allow(clippy::cast_possible_truncation)]
@@ -241,8 +250,12 @@ where
                     return SearchOutcome::Unsat;
                 }
                 AssumptionStep::AllSatisfied => {
-                    if let Some(var) =
-                        pick_branching_var(&mut scratch.heap, &scratch.activities, assignment)
+                    if let Some(var) = pick_branching_var(
+                        &mut scratch.heap,
+                        &scratch.activities,
+                        assignment,
+                        &scratch.eliminated,
+                    )
                     {
                         let lit = if assignment.saved_phase(var) {
                             var.pos()
@@ -321,8 +334,12 @@ fn pick_branching_var(
     heap: &mut OrderHeap,
     activities: &[f64],
     assignment: &Assignment,
+    eliminated: &[bool],
 ) -> Option<Var> {
     while let Some(var) = heap.pop_max(activities) {
+        if eliminated.get(var.index()).copied().unwrap_or(false) {
+            continue;
+        }
         if !assignment.is_assigned(var) {
             return Some(var);
         }

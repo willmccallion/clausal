@@ -18,6 +18,7 @@ use crate::internal::watcher::{
     LongWatchers,
 };
 use crate::result::InterruptReason;
+use crate::solver::inprocess::bve::{BveConfig, BveFrame};
 use crate::solver::inprocess::equiv::EquivFrame;
 use crate::solver::inprocess::{bve, equiv, probe, subsume, vivify, InprocessOutcome};
 use crate::solver::search::propagate::propagate;
@@ -49,6 +50,7 @@ pub(crate) struct SolverState {
     pub(crate) last_outcome: LastOutcome,
     pub(crate) last_core: Vec<Lit>,
     pub(crate) equiv_witness: Vec<EquivFrame>,
+    pub(crate) bve_witness: Vec<BveFrame>,
     pub(crate) enable_inprocessing: bool,
     pub(crate) inprocessing_done: bool,
     #[cfg(all(target_has_atomic = "8", target_has_atomic = "ptr"))]
@@ -76,6 +78,7 @@ impl SolverState {
             last_outcome: LastOutcome::None,
             last_core: Vec::new(),
             equiv_witness: Vec::new(),
+            bve_witness: Vec::new(),
             enable_inprocessing: false,
             inprocessing_done: false,
             #[cfg(all(target_has_atomic = "8", target_has_atomic = "ptr"))]
@@ -370,12 +373,32 @@ impl SolverState {
             return InprocessOutcome::Unsat;
         }
 
+        if self.scratch.eliminated.len() < self.num_vars as usize {
+            self.scratch.eliminated.resize(self.num_vars as usize, false);
+        }
+        let cfg = BveConfig::default();
+        if bve::bve_resolution(
+            &mut self.arena,
+            &mut self.assignment,
+            &mut self.long_watchers,
+            &mut self.bin_watchers,
+            &mut self.learned_clauses,
+            &mut self.bve_witness,
+            &mut self.scratch.eliminated,
+            self.num_vars,
+            &cfg,
+        ) == InprocessOutcome::Unsat
+        {
+            return InprocessOutcome::Unsat;
+        }
+
         InprocessOutcome::Continue
     }
 
     /// Fills in values for variables eliminated during inprocessing so the
     /// returned model covers the original variable set.
     pub(crate) fn reconstruct_model(&mut self) {
+        bve::reconstruct(&mut self.assignment, &self.bve_witness);
         equiv::reconstruct(&mut self.assignment, &self.equiv_witness);
     }
 
