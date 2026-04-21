@@ -23,6 +23,7 @@ pub struct SolverBuilder {
     restart: Option<Box<dyn RestartStrategy>>,
     deletion: Option<Box<dyn ClauseDeletion>>,
     preprocessor: Option<Box<dyn Preprocessor>>,
+    enable_inprocessing: bool,
 }
 
 impl core::fmt::Debug for SolverBuilder {
@@ -55,6 +56,7 @@ impl SolverBuilder {
             restart: None,
             deletion: None,
             preprocessor: None,
+            enable_inprocessing: false,
         }
     }
 
@@ -117,6 +119,21 @@ impl SolverBuilder {
         self
     }
 
+    /// Enables or disables the inprocessing pipeline (probe, vivify, subsume,
+    /// bounded variable elimination, equivalent-literal substitution).
+    ///
+    /// Inprocessing locks in ground-level facts — asserting pure literals,
+    /// deriving failed literals, and substituting equivalent literals — so
+    /// it is only safe when all clauses the solver will see are installed
+    /// before the first call to `solve`. Incremental workflows that enumerate
+    /// models by adding blocking clauses or use assumption-driven solving
+    /// across multiple calls should leave this off.
+    #[inline]
+    pub const fn enable_inprocessing(mut self, on: bool) -> Self {
+        self.enable_inprocessing = on;
+        self
+    }
+
     /// Constructs a fresh solver with the configured settings.
     pub fn build(self) -> Solver {
         let _ = (
@@ -130,7 +147,9 @@ impl SolverBuilder {
             self.deletion,
             self.preprocessor,
         );
-        Solver::new()
+        let mut solver = Solver::new();
+        solver.set_inprocessing(self.enable_inprocessing);
+        solver
     }
 
     /// Constructs a solver seeded with the given formula.

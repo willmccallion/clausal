@@ -18,6 +18,9 @@ use crate::internal::watcher::{
     LongWatchers,
 };
 use crate::result::InterruptReason;
+use crate::solver::inprocess::equiv::EquivFrame;
+use crate::solver::inprocess::{bve, equiv, probe, subsume, vivify, InprocessOutcome};
+use crate::solver::search::propagate::propagate;
 use crate::solver::search::search_loop::{solve_loop, SearchOutcome, SearchScratch};
 use crate::types::{ClauseId, DecisionLevel, Lit, Value, Var};
 
@@ -45,6 +48,9 @@ pub(crate) struct SolverState {
     pub(crate) unsat_at_init: bool,
     pub(crate) last_outcome: LastOutcome,
     pub(crate) last_core: Vec<Lit>,
+    pub(crate) equiv_witness: Vec<EquivFrame>,
+    pub(crate) enable_inprocessing: bool,
+    pub(crate) inprocessing_done: bool,
     #[cfg(all(target_has_atomic = "8", target_has_atomic = "ptr"))]
     pub(crate) interrupter: Option<crate::interrupter::Interrupter>,
 }
@@ -69,6 +75,9 @@ impl SolverState {
             unsat_at_init: false,
             last_outcome: LastOutcome::None,
             last_core: Vec::new(),
+            equiv_witness: Vec::new(),
+            enable_inprocessing: false,
+            inprocessing_done: false,
             #[cfg(all(target_has_atomic = "8", target_has_atomic = "ptr"))]
             interrupter: None,
         }
@@ -160,6 +169,11 @@ impl SolverState {
             self.last_outcome = LastOutcome::Unsat;
             return SearchOutcome::Unsat;
         }
+        if self.run_inprocessing() == InprocessOutcome::Unsat {
+            self.last_outcome = LastOutcome::Unsat;
+            self.unsat_at_init = true;
+            return SearchOutcome::Unsat;
+        }
         let outcome = solve_loop(
             &mut self.arena,
             &mut self.assignment,
@@ -176,6 +190,9 @@ impl SolverState {
             SearchOutcome::Unsat => LastOutcome::Unsat,
             SearchOutcome::Interrupted => LastOutcome::None,
         };
+        if outcome == SearchOutcome::Sat {
+            self.reconstruct_model();
+        }
         outcome
     }
 
@@ -195,10 +212,16 @@ impl SolverState {
             self.last_outcome = LastOutcome::Unsat;
             return (SearchOutcome::Unsat, None);
         }
+        if self.run_inprocessing() == InprocessOutcome::Unsat {
+            self.last_outcome = LastOutcome::Unsat;
+            self.unsat_at_init = true;
+            return (SearchOutcome::Unsat, None);
+        }
         let outcome = self.run_with_assumptions(assumptions);
         match outcome {
             SearchOutcome::Sat => {
                 self.last_outcome = LastOutcome::Sat;
+                self.reconstruct_model();
                 (outcome, None)
             }
             SearchOutcome::Unsat => {
@@ -261,6 +284,99 @@ impl SolverState {
                 self.scratch.heap.insert(var, &self.scratch.activities);
             }
         }
+    }
+
+    /// Runs the inprocessing pipeline once at the ground level before the
+    /// first search call. Subsequent invocations are no-ops so incremental
+    /// solves keep the state established on the first run.
+    ///
+    /// Returns [`InprocessOutcome::Unsat`] if any pass proves the formula
+    /// unsatisfiable at the root level.
+    pub(crate) fn run_inprocessing(&mut self) -> InprocessOutcome {
+        if self.inprocessing_done || !self.enable_inprocessing {
+            return InprocessOutcome::Continue;
+        }
+        self.inprocessing_done = true;
+        debug_assert!(self.assignment.current_level().is_ground());
+
+        if propagate(
+            &mut self.arena,
+            &mut self.assignment,
+            &mut self.long_watchers,
+            &mut self.bin_watchers,
+        )
+        .is_some()
+        {
+            return InprocessOutcome::Unsat;
+        }
+
+        if bve::bve(
+            &mut self.arena,
+            &mut self.assignment,
+            &mut self.long_watchers,
+            &mut self.bin_watchers,
+            self.num_vars,
+        ) == InprocessOutcome::Unsat
+        {
+            return InprocessOutcome::Unsat;
+        }
+
+        if probe::probe(
+            &mut self.arena,
+            &mut self.assignment,
+            &mut self.long_watchers,
+            &mut self.bin_watchers,
+            &self.scratch.activities,
+            self.num_vars,
+            0,
+        ) == InprocessOutcome::Unsat
+        {
+            return InprocessOutcome::Unsat;
+        }
+
+        if vivify::vivify(
+            &mut self.arena,
+            &mut self.assignment,
+            &mut self.long_watchers,
+            &mut self.bin_watchers,
+            &mut self.learned_clauses,
+            0,
+        ) == InprocessOutcome::Unsat
+        {
+            return InprocessOutcome::Unsat;
+        }
+
+        if subsume::subsume(
+            &mut self.arena,
+            &mut self.assignment,
+            &mut self.long_watchers,
+            &mut self.bin_watchers,
+            &mut self.learned_clauses,
+            self.num_vars,
+        ) == InprocessOutcome::Unsat
+        {
+            return InprocessOutcome::Unsat;
+        }
+
+        if equiv::equiv(
+            &mut self.arena,
+            &mut self.assignment,
+            &mut self.long_watchers,
+            &mut self.bin_watchers,
+            &mut self.equiv_witness,
+            self.num_vars,
+        ) == InprocessOutcome::Unsat
+        {
+            return InprocessOutcome::Unsat;
+        }
+
+        InprocessOutcome::Continue
+    }
+
+    /// Fills in values for variables eliminated during inprocessing so the
+    /// returned model covers the original variable set.
+    pub(crate) fn reconstruct_model(&mut self) {
+        equiv::reconstruct(&mut self.assignment, &self.equiv_witness);
     }
 
     /// Returns the truth value of `var` under the current assignment.

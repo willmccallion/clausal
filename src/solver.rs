@@ -1,5 +1,6 @@
 //! [`Solver`]: the incremental CDCL solver entry point.
 
+pub(crate) mod inprocess;
 pub(crate) mod mode;
 pub(crate) mod order_heap;
 pub(crate) mod reduce;
@@ -80,6 +81,15 @@ impl Solver {
     #[must_use]
     pub const fn num_vars(&self) -> u32 {
         self.state.num_vars
+    }
+
+    /// Enables or disables the inprocessing pipeline for this solver.
+    ///
+    /// See [`SolverBuilder::enable_inprocessing`](crate::SolverBuilder::enable_inprocessing)
+    /// for a discussion of when the pass set is safe to run.
+    #[inline]
+    pub fn set_inprocessing(&mut self, on: bool) {
+        self.state.enable_inprocessing = on;
     }
 
     /// Returns the number of clauses currently held by the solver.
