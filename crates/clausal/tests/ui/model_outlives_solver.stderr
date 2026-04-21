@@ -1,0 +1,8 @@
+error[E0515]: cannot return value referencing local variable `s`
+ --> tests/ui/model_outlives_solver.rs:7:5
+  |
+7 |     s.model()
+  |     -^^^^^^^^
+  |     |
+  |     returns a value referencing data owned by the current function
+  |     `s` is borrowed here

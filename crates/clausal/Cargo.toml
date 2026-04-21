@@ -26,5 +26,9 @@ clausal-dimacs = { workspace = true, optional = true }
 clausal-proofs = { workspace = true, optional = true }
 clausal-ipasir = { workspace = true, optional = true }
 
+[dev-dependencies]
+trybuild = { workspace = true }
+clausal-proofs = { workspace = true }
+
 [lints]
 workspace = true

@@ -1,0 +1,38 @@
+error[E0277]: the trait bound `Mine: clausal_proofs::private::Sealed` is not satisfied
+ --> tests/ui/sealed_proof_writer.rs:8:22
+  |
+8 | impl ProofWriter for Mine {
+  |                      ^^^^ unsatisfied trait bound
+  |
+help: the trait `clausal_proofs::private::Sealed` is not implemented for `Mine`
+ --> tests/ui/sealed_proof_writer.rs:6:1
+  |
+6 | struct Mine;
+  | ^^^^^^^^^^^
+help: the following other types implement trait `clausal_proofs::private::Sealed`
+ --> $WORKSPACE/crates/clausal-proofs/src/lib.rs
+  |
+  |         impl private::Sealed for $ty {}
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |         |
+  |         `DratWriter`
+  |         `FratWriter`
+  |         `LratWriter`
+...
+  | define_writer!(DratWriter, ProofFormat::Drat, "DRAT proof writer.");
+  | ------------------------------------------------------------------- in this macro invocation
+  | define_writer!(LratWriter, ProofFormat::Lrat, "LRAT proof writer.");
+  | ------------------------------------------------------------------- in this macro invocation
+  | define_writer!(FratWriter, ProofFormat::Frat, "FRAT proof writer.");
+  | ------------------------------------------------------------------- in this macro invocation
+note: required by a bound in `ProofWriter`
+ --> $WORKSPACE/crates/clausal-proofs/src/lib.rs
+  |
+  | pub trait ProofWriter: private::Sealed + Send {
+  |                        ^^^^^^^^^^^^^^^ required by this bound in `ProofWriter`
+  = note: `ProofWriter` is a "sealed trait", because to implement it you also need to implement `clausal_proofs::private::Sealed`, which is not accessible; this is usually done to force you to use one of the provided types that already implement it
+  = help: the following types implement the trait:
+            clausal_proofs::DratWriter
+            clausal_proofs::LratWriter
+            clausal_proofs::FratWriter
+  = note: this error originates in the macro `define_writer` (in Nightly builds, run with -Z macro-backtrace for more info)
