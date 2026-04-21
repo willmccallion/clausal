@@ -1,5 +1,7 @@
 //! [`Solver`]: the incremental CDCL solver entry point.
 
+pub(crate) mod search;
+
 use alloc::vec::Vec;
 
 use crate::builder::SolverBuilder;

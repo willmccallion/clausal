@@ -8,6 +8,7 @@
 
 use alloc::vec::Vec;
 
+use crate::internal::arena::ClauseArena;
 use crate::types::{ClauseId, Lit};
 
 /// A watcher on a long (three-or-more literal) clause.
@@ -49,6 +50,30 @@ pub(crate) fn ensure_binary_size(watchers: &mut BinaryWatchers, num_vars: usize)
     if watchers.len() < needed {
         watchers.resize_with(needed, Vec::new);
     }
+}
+
+/// Installs watchers for a freshly-added long clause.
+///
+/// The first two literals in the clause body become the watched literals;
+/// the caller must have arranged for them to be unassigned or true. The
+/// clause is registered in the watch-lists indexed by the negation of each
+/// watched literal, matching the convention that `long_watchers[p]` holds
+/// clauses revisited when `p` is assigned true (i.e. the clauses whose
+/// watched literal `!p` just became false).
+pub(crate) fn attach_long(long_watchers: &mut LongWatchers, arena: &ClauseArena, id: ClauseId) {
+    let lits = arena.lits(id);
+    debug_assert!(lits.len() >= 3, "attach_long requires len >= 3");
+    let a = lits[0];
+    let b = lits[1];
+    long_watchers[(!a).index()].push(Watcher { clause: id, blocker: b });
+    long_watchers[(!b).index()].push(Watcher { clause: id, blocker: a });
+}
+
+/// Installs watchers for a freshly-added binary clause.
+pub(crate) fn attach_binary(bin_watchers: &mut BinaryWatchers, lits: [Lit; 2]) {
+    let [a, b] = lits;
+    bin_watchers[(!a).index()].push(BinaryWatch { partner: b });
+    bin_watchers[(!b).index()].push(BinaryWatch { partner: a });
 }
 
 #[cfg(test)]
