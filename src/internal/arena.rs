@@ -1,17 +1,21 @@
 //! Flat clause arena backed by struct-of-arrays storage.
 //!
-//! Per-clause metadata (length, flags, LBD, literal-range start) lives in
+//! Per-clause metadata (length, flags, literal-range start) lives in
 //! [`ClauseArena::meta`]. Literal bodies are concatenated in
 //! [`ClauseArena::lits`]. A [`ClauseId`] is `NonZeroU32(slot + 1)` where
 //! `slot` indexes `meta`; the slot's [`ClauseMeta`] carries a range into
 //! `lits`. Deleted clauses keep their metadata and literal range until the
 //! next compaction, which is handled outside this module.
 //!
+//! Learned-clause LBDs live in a sparse side table [`ClauseArena::lbds`],
+//! addressed through a learned index packed into [`ClauseMeta::flags`]. That
+//! keeps per-clause metadata to twelve bytes for non-learned clauses, which
+//! dominate the arena on industrial instances; only learned clauses pay for
+//! an extra four-byte LBD slot.
+//!
 //! This layout preserves `&[Lit]` access without `unsafe` code (the crate
-//! forbids `unsafe_code`) at the cost of sixteen bytes of metadata per
-//! clause versus the packed 8-byte header used by some reference solvers.
-//! The extra bytes are out of line from the propagation hot path, which
-//! reads the literal slice directly.
+//! forbids `unsafe_code`). Metadata reads stay out of the propagation hot
+//! path, which touches only the literal slice.
 
 use alloc::vec::Vec;
 use core::num::NonZeroU32;
@@ -19,8 +23,12 @@ use core::num::NonZeroU32;
 use crate::error::{Error, Result};
 use crate::types::{ClauseId, Lit};
 
-const FLAG_LEARNED: u32 = 1 << 0;
-const FLAG_DELETED: u32 = 1 << 1;
+const FLAG_DELETED: u32 = 1 << 0;
+/// Shift applied to the learned index before it is stored in
+/// [`ClauseMeta::flags`]. A value of zero in the upper bits means the clause
+/// is not learned; otherwise the stored value is `learned_index + 1` so that
+/// index zero is still representable.
+const LEARNED_IDX_SHIFT: u32 = 1;
 
 /// Metadata for a single clause inside [`ClauseArena`].
 #[derive(Debug, Clone, Copy)]
@@ -29,8 +37,8 @@ pub(crate) struct ClauseMeta {
     pub(crate) lits_start: u32,
     /// Number of literals in this clause.
     pub(crate) len: u32,
-    /// Literal-block distance (only meaningful for learned clauses).
-    pub(crate) lbd: u32,
+    /// Packed flags. Bit 0 is the deleted flag; the remaining bits hold
+    /// `learned_index + 1` for learned clauses (zero means not learned).
     flags: u32,
 }
 
@@ -39,13 +47,25 @@ impl ClauseMeta {
     #[inline]
     #[allow(dead_code, reason = "consumed when inprocessing walks learned clauses")]
     pub(crate) const fn is_learned(self) -> bool {
-        self.flags & FLAG_LEARNED != 0
+        self.flags >> LEARNED_IDX_SHIFT != 0
     }
 
     /// Returns `true` if this clause has been marked for deletion.
     #[inline]
     pub(crate) const fn is_deleted(self) -> bool {
         self.flags & FLAG_DELETED != 0
+    }
+
+    /// Returns the learned-clause index for this clause, or `None` when the
+    /// clause is not learned.
+    #[inline]
+    const fn learned_index(self) -> Option<usize> {
+        let raw = self.flags >> LEARNED_IDX_SHIFT;
+        if raw == 0 {
+            None
+        } else {
+            Some((raw - 1) as usize)
+        }
     }
 }
 
@@ -54,12 +74,16 @@ impl ClauseMeta {
 pub(crate) struct ClauseArena {
     meta: Vec<ClauseMeta>,
     lits: Vec<Lit>,
+    /// Side table of literal-block distances for learned clauses. Indexed by
+    /// the learned-index packed into [`ClauseMeta::flags`] and only populated
+    /// for learned clauses.
+    lbds: Vec<u32>,
 }
 
 impl ClauseArena {
     /// Creates an empty arena.
     pub(crate) const fn new() -> Self {
-        Self { meta: Vec::new(), lits: Vec::new() }
+        Self { meta: Vec::new(), lits: Vec::new(), lbds: Vec::new() }
     }
 
     /// Returns the number of clauses (including deleted but un-compacted).
@@ -84,6 +108,7 @@ impl ClauseArena {
     pub(crate) fn clear(&mut self) {
         self.meta.clear();
         self.lits.clear();
+        self.lbds.clear();
     }
 
     /// Appends a clause and returns its id.
@@ -101,8 +126,21 @@ impl ClauseArena {
         let id_raw = slot.checked_add(1).ok_or(Error::ClauseLimitExceeded)?;
         let nz = NonZeroU32::new(id_raw).ok_or(Error::ClauseLimitExceeded)?;
 
-        let flags = if learned { FLAG_LEARNED } else { 0 };
-        self.meta.push(ClauseMeta { lits_start, len, lbd, flags });
+        let flags = if learned {
+            let learned_idx = u32::try_from(self.lbds.len())
+                .map_err(|_| Error::ClauseLimitExceeded)?;
+            let stored = learned_idx
+                .checked_add(1)
+                .ok_or(Error::ClauseLimitExceeded)?;
+            let shifted = stored
+                .checked_shl(LEARNED_IDX_SHIFT)
+                .ok_or(Error::ClauseLimitExceeded)?;
+            self.lbds.push(lbd);
+            shifted
+        } else {
+            0
+        };
+        self.meta.push(ClauseMeta { lits_start, len, flags });
         self.lits.extend_from_slice(body);
         Ok(ClauseId::from_raw(nz))
     }
@@ -139,17 +177,21 @@ impl ClauseArena {
         self.meta[Self::slot(id)].is_deleted()
     }
 
-    /// Returns the LBD of a clause.
+    /// Returns the LBD of a clause. Non-learned clauses report `0`.
     #[inline]
     pub(crate) fn lbd(&self, id: ClauseId) -> u32 {
-        self.meta[Self::slot(id)].lbd
+        self.meta[Self::slot(id)]
+            .learned_index()
+            .map_or(0, |idx| self.lbds[idx])
     }
 
-    /// Overwrites the LBD of a clause.
+    /// Overwrites the LBD of a clause. No-op if the clause is not learned.
     #[inline]
     #[allow(dead_code, reason = "vivification rewrites LBD after shortening a clause")]
     pub(crate) fn set_lbd(&mut self, id: ClauseId, lbd: u32) {
-        self.meta[Self::slot(id)].lbd = lbd;
+        if let Some(idx) = self.meta[Self::slot(id)].learned_index() {
+            self.lbds[idx] = lbd;
+        }
     }
 
     /// Marks a clause deleted. The literal range remains addressable until
@@ -188,6 +230,7 @@ impl ClauseArena {
         let mut remap: Vec<Option<ClauseId>> = Vec::with_capacity(self.meta.len());
         let mut new_meta: Vec<ClauseMeta> = Vec::with_capacity(self.meta.len());
         let mut new_lits: Vec<Lit> = Vec::with_capacity(self.lits.len());
+        let mut new_lbds: Vec<u32> = Vec::with_capacity(self.lbds.len());
 
         for old_slot in 0..self.meta.len() {
             let meta = self.meta[old_slot];
@@ -204,12 +247,26 @@ impl ClauseArena {
                 u32::try_from(new_meta.len()).map_err(|_| Error::ClauseLimitExceeded)?;
             let id_raw = new_slot.checked_add(1).ok_or(Error::ClauseLimitExceeded)?;
             let nz = NonZeroU32::new(id_raw).ok_or(Error::ClauseLimitExceeded)?;
-            new_meta.push(ClauseMeta { lits_start, ..meta });
+            let new_flags = if let Some(old_idx) = meta.learned_index() {
+                let old_lbd = self.lbds[old_idx];
+                let new_idx = u32::try_from(new_lbds.len())
+                    .map_err(|_| Error::ClauseLimitExceeded)?;
+                let stored = new_idx.checked_add(1).ok_or(Error::ClauseLimitExceeded)?;
+                let shifted = stored
+                    .checked_shl(LEARNED_IDX_SHIFT)
+                    .ok_or(Error::ClauseLimitExceeded)?;
+                new_lbds.push(old_lbd);
+                shifted
+            } else {
+                0
+            };
+            new_meta.push(ClauseMeta { lits_start, len: meta.len, flags: new_flags });
             remap.push(Some(ClauseId::from_raw(nz)));
         }
 
         self.meta = new_meta;
         self.lits = new_lits;
+        self.lbds = new_lbds;
         Ok(remap)
     }
 
