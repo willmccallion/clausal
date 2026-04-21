@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 use crate::builder::SolverBuilder;
 use crate::error::{Error, Result};
-use crate::result::{Limited, Model, Solution, Solutions, UnsatCore};
+use crate::result::{InterruptReason, Limited, Model, Solution, Solutions, UnsatCore};
 use crate::solver::search::search_loop::SearchOutcome;
 use crate::solver::state::{LastOutcome, SolverState};
 use crate::stats::Statistics;
@@ -122,15 +122,29 @@ impl Solver {
         self.state.assignment.value_of(lit)
     }
 
-    /// Returns an interrupter handle.
+    /// Returns an interrupter handle that can signal the solver to stop.
+    ///
+    /// The returned handle shares a flag with the solver's internal copy.
+    /// Subsequent calls return clones of the same handle so multiple
+    /// observers can all request an interrupt.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::AtomicsUnavailable`] on targets without atomic
+    /// support.
     #[cfg(all(target_has_atomic = "8", target_has_atomic = "ptr"))]
-    pub fn interrupter(&self) -> Result<Interrupter> {
-        Err(Error::NotImplemented)
+    pub fn interrupter(&mut self) -> Result<Interrupter> {
+        let handle = self.state.interrupter.get_or_insert_with(Interrupter::new).clone();
+        Ok(handle)
     }
 
     /// Returns an interrupter handle. Always fails on targets without atomics.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::AtomicsUnavailable`] unconditionally on this target.
     #[cfg(not(all(target_has_atomic = "8", target_has_atomic = "ptr")))]
-    pub fn interrupter(&self) -> Result<()> {
+    pub fn interrupter(&mut self) -> Result<()> {
         Err(Error::AtomicsUnavailable)
     }
 
@@ -142,17 +156,38 @@ impl Solver {
     /// wrapping is kept for forward compatibility with proof-emission
     /// failures and future resource guards.
     pub fn solve(&mut self) -> Result<Solution<'_>> {
+        self.state.reset_search_state();
         self.drain_pending();
         let outcome = self.state.solve();
-        Ok(match outcome {
-            SearchOutcome::Sat => Solution::Sat(Model::new(self)),
-            SearchOutcome::Unsat => Solution::Unsat(UnsatCore::new(self)),
-        })
+        match outcome {
+            SearchOutcome::Sat => Ok(Solution::Sat(Model::new(self))),
+            SearchOutcome::Unsat => Ok(Solution::Unsat(UnsatCore::new(self))),
+            SearchOutcome::Interrupted => Err(Error::Interrupted),
+        }
     }
 
     /// Drives search under the given assumption literals.
-    pub fn solve_under<I: IntoIterator<Item = Lit>>(&mut self, _assumptions: I) -> Result<Limited<'_>> {
-        Err(Error::NotImplemented)
+    ///
+    /// # Errors
+    ///
+    /// Currently never returns an error; the `Result` wrapping exists for
+    /// forward compatibility with proof-emission and resource-guard
+    /// failures.
+    pub fn solve_under<I: IntoIterator<Item = Lit>>(
+        &mut self,
+        assumptions: I,
+    ) -> Result<Limited<'_>> {
+        self.state.reset_search_state();
+        self.drain_pending();
+        let assumptions: Vec<Lit> = assumptions.into_iter().collect();
+        let (outcome, reason) = self.state.solve_under(&assumptions);
+        Ok(match outcome {
+            SearchOutcome::Sat => Limited::Sat(Model::new(self)),
+            SearchOutcome::Unsat => Limited::Unsat(UnsatCore::new(self)),
+            SearchOutcome::Interrupted => {
+                Limited::Unknown(reason.unwrap_or(InterruptReason::External))
+            }
+        })
     }
 
     /// Returns the model for the most recent SAT result, if any.
@@ -184,6 +219,12 @@ impl Solver {
             Value::True => crate::types::Polarity::Positive,
             Value::False | Value::Unassigned => crate::types::Polarity::Negative,
         }
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn last_core(&self) -> &[Lit] {
+        &self.state.last_core
     }
 
     fn drain_pending(&mut self) {
@@ -252,5 +293,43 @@ mod tests {
         let _ = s.solve().unwrap();
         assert!(s.unsat_core().is_some());
         assert!(s.model().is_none());
+    }
+
+    #[test]
+    fn solutions_enumerates_all_models_of_x_or_y() {
+        let mut s = Solver::new();
+        let a = s.new_var().unwrap();
+        let b = s.new_var().unwrap();
+        s.add([a.pos(), b.pos()]);
+        let models: alloc::vec::Vec<_> = s.solutions().collect();
+        let printed: alloc::vec::Vec<_> = models
+            .iter()
+            .map(|m| {
+                (
+                    matches!(m.var_value(a), crate::types::Polarity::Positive),
+                    matches!(m.var_value(b), crate::types::Polarity::Positive),
+                )
+            })
+            .collect();
+        for m in &models {
+            let sat_a = matches!(m.var_value(a), crate::types::Polarity::Positive);
+            let sat_b = matches!(m.var_value(b), crate::types::Polarity::Positive);
+            assert!(sat_a || sat_b, "every enumerated model must satisfy a or b");
+        }
+        assert_eq!(models.len(), 3, "x or y has three models; got {printed:?}");
+    }
+
+    #[test]
+    fn solve_under_conflict_returns_core() {
+        let mut s = Solver::new();
+        let a = s.new_var().unwrap();
+        s.add([a.pos()]);
+        match s.solve_under([a.neg()]).unwrap() {
+            crate::result::Limited::Unsat(core) => {
+                assert!(!core.is_empty());
+                assert!(core.lits().contains(&a.neg()));
+            }
+            other => panic!("expected unsat, got {other:?}"),
+        }
     }
 }

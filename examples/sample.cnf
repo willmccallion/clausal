@@ -1,0 +1,4 @@
+c sample DIMACS CNF: (x or y) and (not x or z)
+p cnf 3 2
+1 2 0
+-1 3 0

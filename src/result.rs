@@ -170,17 +170,27 @@ impl<'s> UnsatCore<'s> {
         Self { solver }
     }
 
+    /// Returns the assumption literals that participate in the core.
+    #[must_use]
+    pub fn lits(&self) -> &'s [Lit] {
+        self.solver.last_core()
+    }
+
     /// Returns the number of literals in the core.
     #[must_use]
     pub fn len(&self) -> usize {
-        let _ = self.solver;
-        0
+        self.lits().len()
     }
 
     /// Returns `true` if the core is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.lits().is_empty()
+    }
+
+    /// Iterates over the core literals.
+    pub fn iter(&self) -> core::slice::Iter<'s, Lit> {
+        self.lits().iter()
     }
 }
 
@@ -200,7 +210,27 @@ impl Iterator for Solutions<'_> {
     type Item = OwnedModel;
 
     fn next(&mut self) -> Option<OwnedModel> {
-        let _ = &self.solver;
-        None
+        let Ok(result) = self.solver.solve() else {
+            return None;
+        };
+        let model = match result {
+            Solution::Sat(m) => m,
+            Solution::Unsat(_) => return None,
+        };
+        let owned = model.to_owned();
+        let mut blocking: Vec<Lit> = Vec::with_capacity(owned.len());
+        for (var, pol) in owned.iter().copied().enumerate().filter_map(|(i, pol)| {
+            #[allow(clippy::cast_possible_truncation)]
+            let raw = (i as u32).saturating_add(1);
+            Var::new(raw).map(|v| (v, pol))
+        }) {
+            let lit = match pol {
+                Polarity::Positive => var.neg(),
+                Polarity::Negative => var.pos(),
+            };
+            blocking.push(lit);
+        }
+        self.solver.add(blocking);
+        Some(owned)
     }
 }

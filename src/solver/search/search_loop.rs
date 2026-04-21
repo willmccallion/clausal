@@ -21,7 +21,7 @@ use crate::solver::restart::RestartState;
 use crate::solver::search::analyze::analyze;
 use crate::solver::search::backtrack::backtrack_to;
 use crate::solver::search::propagate::propagate;
-use crate::types::{ClauseId, DecisionLevel, Lit, Var};
+use crate::types::{ClauseId, DecisionLevel, Lit, Value, Var};
 
 /// VSIDS variable decay. Each conflict divides `var_inc` by this factor,
 /// so future bumps weigh more than past ones.
@@ -107,21 +107,50 @@ pub(crate) enum SearchOutcome {
     Sat,
     /// The formula is unsatisfiable.
     Unsat,
+    /// Search stopped early because the abort check tripped.
+    Interrupted,
+}
+
+/// Result of trying to install the next assumption literal.
+enum AssumptionStep {
+    /// A fresh decision level was opened with an assumption literal.
+    Installed,
+    /// Every assumption is already satisfied.
+    AllSatisfied,
+    /// The assumption at the returned index conflicts under the current
+    /// partial assignment; the conjunction of assumptions is infeasible.
+    Infeasible,
 }
 
 /// Runs the CDCL search loop until SAT or UNSAT is determined.
-pub(crate) fn solve_loop(
+///
+/// `assumptions` are reinstalled as decisions at every branching step, so
+/// restarts and chrono backjumps to ground level transparently re-seed
+/// them. `core_out` is cleared on entry and populated on UNSAT under
+/// assumptions. `abort` is polled once per iteration.
+pub(crate) fn solve_loop<F>(
     arena: &mut ClauseArena,
     assignment: &mut Assignment,
     long_watchers: &mut LongWatchers,
     bin_watchers: &mut BinaryWatchers,
     learned_clauses: &mut Vec<ClauseId>,
     scratch: &mut SearchScratch,
-) -> SearchOutcome {
+    assumptions: &[Lit],
+    core_out: &mut Vec<Lit>,
+    abort: F,
+) -> SearchOutcome
+where
+    F: Fn() -> bool,
+{
+    core_out.clear();
     loop {
+        if abort() {
+            return SearchOutcome::Interrupted;
+        }
         if let Some(conflict) = propagate(arena, assignment, long_watchers, bin_watchers) {
             let conflict_level = conflict.level_of(arena, assignment);
             if conflict_level.is_ground() {
+                populate_core(assignments_on_trail(assumptions, assignment), core_out);
                 return SearchOutcome::Unsat;
             }
             scratch.conflicts = scratch.conflicts.saturating_add(1);
@@ -203,13 +232,30 @@ pub(crate) fn solve_loop(
                     scratch.mode.switch(assignment, scratch.conflicts);
                 }
             }
-        } else if let Some(var) = pick_branching_var(&mut scratch.heap, &scratch.activities, assignment) {
-            let lit = if assignment.saved_phase(var) { var.pos() } else { var.neg() };
-            assignment.push_decision_level();
-            let lvl = assignment.current_level();
-            assignment.assign(lit, Reason::decision(), lvl);
         } else {
-            return SearchOutcome::Sat;
+            match install_next_assumption(assignment, assumptions) {
+                AssumptionStep::Installed => continue,
+                AssumptionStep::Infeasible => {
+                    populate_core(assignments_on_trail(assumptions, assignment), core_out);
+                    return SearchOutcome::Unsat;
+                }
+                AssumptionStep::AllSatisfied => {
+                    if let Some(var) =
+                        pick_branching_var(&mut scratch.heap, &scratch.activities, assignment)
+                    {
+                        let lit = if assignment.saved_phase(var) {
+                            var.pos()
+                        } else {
+                            var.neg()
+                        };
+                        assignment.push_decision_level();
+                        let lvl = assignment.current_level();
+                        assignment.assign(lit, Reason::decision(), lvl);
+                    } else {
+                        return SearchOutcome::Sat;
+                    }
+                }
+            }
         }
     }
 }
@@ -281,6 +327,56 @@ fn pick_branching_var(
         }
     }
     None
+}
+
+/// Scans `assumptions` for the first literal that is not already satisfied.
+///
+/// Returns `Installed` after opening a new decision level and assigning an
+/// unassigned assumption; `Infeasible` once an assumption is found to be
+/// false under the current partial assignment; `AllSatisfied` when every
+/// assumption is already true on the trail.
+fn install_next_assumption(
+    assignment: &mut Assignment,
+    assumptions: &[Lit],
+) -> AssumptionStep {
+    for &lit in assumptions {
+        match assignment.value_of(lit) {
+            Value::True => continue,
+            Value::False => return AssumptionStep::Infeasible,
+            Value::Unassigned => {
+                assignment.push_decision_level();
+                let lvl = assignment.current_level();
+                assignment.assign(lit, Reason::decision(), lvl);
+                return AssumptionStep::Installed;
+            }
+        }
+    }
+    AssumptionStep::AllSatisfied
+}
+
+/// Copies every assumption that currently holds a non-unassigned value on
+/// the trail into `core_out`. The result is a conservative over-
+/// approximation of the failing assumption set.
+fn assignments_on_trail<'a>(
+    assumptions: &'a [Lit],
+    assignment: &Assignment,
+) -> impl Iterator<Item = Lit> + 'a {
+    let present: alloc::vec::Vec<bool> = assumptions
+        .iter()
+        .map(|&lit| assignment.value_of(lit) != Value::Unassigned)
+        .collect();
+    assumptions
+        .iter()
+        .copied()
+        .zip(present.into_iter())
+        .filter_map(|(lit, present)| present.then_some(lit))
+}
+
+fn populate_core<I: IntoIterator<Item = Lit>>(lits: I, core_out: &mut Vec<Lit>) {
+    core_out.clear();
+    for lit in lits {
+        core_out.push(lit);
+    }
 }
 
 /// Re-inserts every variable about to be unassigned by a backtrack.
@@ -363,6 +459,7 @@ mod tests {
         }
 
         fn solve(&mut self) -> SearchOutcome {
+            let mut core = Vec::new();
             solve_loop(
                 &mut self.arena,
                 &mut self.assignment,
@@ -370,6 +467,23 @@ mod tests {
                 &mut self.bw,
                 &mut self.learned,
                 &mut self.scratch,
+                &[],
+                &mut core,
+                || false,
+            )
+        }
+
+        fn solve_under(&mut self, assumptions: &[Lit], core: &mut Vec<Lit>) -> SearchOutcome {
+            solve_loop(
+                &mut self.arena,
+                &mut self.assignment,
+                &mut self.lw,
+                &mut self.bw,
+                &mut self.learned,
+                &mut self.scratch,
+                assumptions,
+                core,
+                || false,
             )
         }
     }
@@ -378,6 +492,38 @@ mod tests {
     fn empty_formula_is_sat() {
         let mut h = Harness::new(3);
         assert_eq!(h.solve(), SearchOutcome::Sat);
+    }
+
+    #[test]
+    fn assumption_forces_value() {
+        let mut h = Harness::new(2);
+        h.add_binary(v(1).pos(), v(2).pos());
+        let mut core = Vec::new();
+        let outcome = h.solve_under(&[v(1).neg()], &mut core);
+        assert_eq!(outcome, SearchOutcome::Sat);
+        assert_eq!(h.assignment.value(v(1)), Value::False);
+        assert_eq!(h.assignment.value(v(2)), Value::True);
+    }
+
+    #[test]
+    fn contradicting_assumption_is_unsat_with_core() {
+        let mut h = Harness::new(1);
+        h.add_unit(v(1).pos());
+        let mut core = Vec::new();
+        let outcome = h.solve_under(&[v(1).neg()], &mut core);
+        assert_eq!(outcome, SearchOutcome::Unsat);
+        assert!(core.contains(&v(1).neg()));
+    }
+
+    #[test]
+    fn satisfied_assumption_leaves_model_consistent() {
+        let mut h = Harness::new(2);
+        h.add_binary(v(1).pos(), v(2).neg());
+        let mut core = Vec::new();
+        let outcome = h.solve_under(&[v(1).pos(), v(2).neg()], &mut core);
+        assert_eq!(outcome, SearchOutcome::Sat);
+        assert_eq!(h.assignment.value(v(1)), Value::True);
+        assert_eq!(h.assignment.value(v(2)), Value::False);
     }
 
     #[test]
