@@ -5,4 +5,5 @@
 //! watchers). The pieces are composed by `search_loop` once all phases are
 //! in place.
 
+pub(crate) mod analyze;
 pub(crate) mod propagate;
