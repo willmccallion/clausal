@@ -55,9 +55,8 @@ impl<'s> Model<'s> {
 
     /// Returns the polarity assigned to the given variable.
     #[must_use]
-    pub fn var_value(&self, _var: Var) -> Polarity {
-        let _ = self.solver;
-        Polarity::Positive
+    pub fn var_value(&self, var: Var) -> Polarity {
+        self.solver.var_polarity(var)
     }
 
     /// Returns the truth value of the given literal under this model.
