@@ -22,6 +22,7 @@ pub mod context;
 pub mod deletion;
 pub mod error;
 pub mod heuristics;
+pub(crate) mod internal;
 #[cfg(all(target_has_atomic = "8", target_has_atomic = "ptr"))]
 pub mod interrupter;
 pub mod preprocessors;
