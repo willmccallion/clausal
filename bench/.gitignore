@@ -1,0 +1,5 @@
+.cache/
+instances/
+solvers/
+compare-results.csv
+compare-cactus.png

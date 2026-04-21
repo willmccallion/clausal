@@ -25,6 +25,16 @@ static_assertions = "1.1"
 proptest = "1.5"
 trybuild = "1.0"
 
+[[bin]]
+name = "clausal"
+path = "src/bin/clausal.rs"
+required-features = ["dimacs"]
+
+[[bin]]
+name = "clausal-bench"
+path = "src/bin/clausal-bench.rs"
+required-features = ["dimacs"]
+
 [[bench]]
 name = "solver"
 harness = false
