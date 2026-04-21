@@ -14,6 +14,7 @@ use crate::internal::reason::Reason;
 use crate::internal::trail::Assignment;
 use crate::internal::watcher::{attach_binary, attach_long, BinaryWatchers, LongWatchers};
 use crate::solver::order_heap::OrderHeap;
+use crate::solver::reduce::{compact, reduce_learned, ReduceState};
 use crate::solver::restart::RestartState;
 use crate::solver::search::analyze::analyze;
 use crate::solver::search::backtrack::backtrack_to;
@@ -42,6 +43,9 @@ pub(crate) struct SearchScratch {
     pub(crate) restart: RestartState,
     pub(crate) restarts: u64,
     pub(crate) conflicts: u64,
+    pub(crate) reduce: ReduceState,
+    pub(crate) reductions: u64,
+    pub(crate) compactions: u64,
 }
 
 impl SearchScratch {
@@ -59,6 +63,9 @@ impl SearchScratch {
             restart: RestartState::new(),
             restarts: 0,
             conflicts: 0,
+            reduce: ReduceState::new(),
+            reductions: 0,
+            compactions: 0,
         }
     }
 
@@ -142,7 +149,9 @@ pub(crate) fn solve_loop(
                 backjump,
             );
             #[allow(clippy::cast_precision_loss)]
-            if scratch.restart.should_restart(peak_trail_len as f64) {
+            let restart = scratch.restart.should_restart(peak_trail_len as f64);
+            let reduce = scratch.reduce.should_reduce(scratch.conflicts);
+            if restart || reduce {
                 reinsert_from_trail(
                     assignment,
                     &mut scratch.heap,
@@ -150,8 +159,20 @@ pub(crate) fn solve_loop(
                     DecisionLevel::GROUND,
                 );
                 backtrack_to(assignment, DecisionLevel::GROUND);
-                scratch.restart.reset_window();
-                scratch.restarts = scratch.restarts.saturating_add(1);
+                if restart {
+                    scratch.restart.reset_window();
+                    scratch.restarts = scratch.restarts.saturating_add(1);
+                }
+                if reduce {
+                    reduce_learned(arena, long_watchers, learned_clauses, assignment);
+                    scratch.reduce.on_reduced();
+                    scratch.reductions = scratch.reductions.saturating_add(1);
+                    if scratch.reduce.should_compact()
+                        && compact(arena, long_watchers, learned_clauses, assignment).is_ok()
+                    {
+                        scratch.compactions = scratch.compactions.saturating_add(1);
+                    }
+                }
             }
         } else if let Some(var) = pick_branching_var(&mut scratch.heap, &scratch.activities, assignment) {
             let lit = if assignment.saved_phase(var) { var.pos() } else { var.neg() };

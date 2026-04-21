@@ -171,6 +171,46 @@ impl ClauseArena {
         let end = start + m.len as usize;
         &mut self.lits[start..end]
     }
+
+    /// Rewrites the arena in place, dropping every clause marked deleted.
+    /// Returns a remap table indexed by the old slot; entry `i` is `Some(new_id)`
+    /// if the clause survived or `None` if it was dropped. Live clauses keep
+    /// their relative order so callers can rewrite external `ClauseId`s
+    /// through the table.
+    pub(crate) fn compact(&mut self) -> Result<Vec<Option<ClauseId>>> {
+        let mut remap: Vec<Option<ClauseId>> = Vec::with_capacity(self.meta.len());
+        let mut new_meta: Vec<ClauseMeta> = Vec::with_capacity(self.meta.len());
+        let mut new_lits: Vec<Lit> = Vec::with_capacity(self.lits.len());
+
+        for old_slot in 0..self.meta.len() {
+            let meta = self.meta[old_slot];
+            if meta.is_deleted() {
+                remap.push(None);
+                continue;
+            }
+            let start = meta.lits_start as usize;
+            let end = start + meta.len as usize;
+            let lits_start =
+                u32::try_from(new_lits.len()).map_err(|_| Error::ClauseLimitExceeded)?;
+            new_lits.extend_from_slice(&self.lits[start..end]);
+            let new_slot =
+                u32::try_from(new_meta.len()).map_err(|_| Error::ClauseLimitExceeded)?;
+            let id_raw = new_slot.checked_add(1).ok_or(Error::ClauseLimitExceeded)?;
+            let nz = NonZeroU32::new(id_raw).ok_or(Error::ClauseLimitExceeded)?;
+            new_meta.push(ClauseMeta { lits_start, ..meta });
+            remap.push(Some(ClauseId::from_raw(nz)));
+        }
+
+        self.meta = new_meta;
+        self.lits = new_lits;
+        Ok(remap)
+    }
+
+    /// Returns the zero-based slot index behind `id`.
+    #[inline]
+    pub(crate) fn slot_of(id: ClauseId) -> usize {
+        Self::slot(id)
+    }
 }
 
 #[cfg(test)]

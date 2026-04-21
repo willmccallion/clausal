@@ -15,7 +15,7 @@
 use alloc::vec::Vec;
 
 use crate::internal::reason::Reason;
-use crate::types::{DecisionLevel, Lit, Value, Var};
+use crate::types::{ClauseId, DecisionLevel, Lit, Value, Var};
 
 /// Partial assignment backed by a chronological trail.
 #[derive(Debug, Default)]
@@ -243,6 +243,17 @@ impl Assignment {
     #[inline]
     pub(crate) fn best_trail_len(&self) -> usize {
         self.best_trail_len
+    }
+
+    /// Rewrites every `Reason::LongClause(id)` in the reasons array by
+    /// applying `map` to the clause id. Used by arena compaction to
+    /// migrate existing reasons onto the post-compaction clause ids.
+    pub(crate) fn remap_long_reasons<F: FnMut(ClauseId) -> ClauseId>(&mut self, mut map: F) {
+        for r in &mut self.reasons {
+            if let Reason::LongClause(id) = r {
+                *id = map(*id);
+            }
+        }
     }
 
     /// Clears every assignment and trail entry, keeping allocated storage.
