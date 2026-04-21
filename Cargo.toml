@@ -13,7 +13,7 @@ categories = ["algorithms", "mathematics", "no-std", "wasm"]
 keywords = ["sat", "solver", "cdcl", "satisfiability", "logic"]
 
 [features]
-default = ["std", "dimacs"]
+default = []
 std = []
 dimacs = ["std"]
 proofs = []
