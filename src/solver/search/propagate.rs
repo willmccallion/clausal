@@ -95,7 +95,7 @@ pub(crate) fn propagate(
             if let Some(k) = replacement {
                 lits.swap(1, k);
                 let new_lit = lits[1];
-                long_watchers[new_lit.index()].push(Watcher {
+                long_watchers[(!new_lit).index()].push(Watcher {
                     clause: w.clause,
                     blocker: first,
                 });

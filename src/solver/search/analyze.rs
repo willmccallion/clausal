@@ -28,9 +28,15 @@ use crate::types::{DecisionLevel, Lit, Var};
 /// learned clause: position 0 is the asserting literal, position 1 (when
 /// present) is the highest-level remaining literal.
 ///
+/// `activities` and `var_inc` drive VSIDS: every variable that enters the
+/// seen set has its activity bumped by `var_inc`; the whole array is
+/// rescaled in-place (activity and `var_inc` divided by `1e100`) whenever
+/// an entry crosses the ceiling.
+///
 /// If the conflict is at ground level the learned clause is empty, the
 /// backjump level is `GROUND`, and LBD is `0`, signalling UNSAT to the
 /// caller.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn analyze(
     arena: &ClauseArena,
     assignment: &Assignment,
@@ -41,6 +47,8 @@ pub(crate) fn analyze(
     analyze_stack: &mut Vec<Var>,
     analyze_to_clear: &mut Vec<Var>,
     analyze_levels: &mut Vec<DecisionLevel>,
+    activities: &mut [f64],
+    var_inc: &mut f64,
 ) -> (DecisionLevel, u32) {
     let n = assignment.num_vars();
     if seen.len() < n {
@@ -65,6 +73,8 @@ pub(crate) fn analyze(
                     &mut counter,
                     learned,
                     analyze_to_clear,
+                    activities,
+                    var_inc,
                 );
             }
         }
@@ -78,6 +88,8 @@ pub(crate) fn analyze(
                     &mut counter,
                     learned,
                     analyze_to_clear,
+                    activities,
+                    var_inc,
                 );
             }
         }
@@ -125,6 +137,8 @@ pub(crate) fn analyze(
                     &mut counter,
                     learned,
                     analyze_to_clear,
+                    activities,
+                    var_inc,
                 );
             }
             Reason::LongClause(id) => {
@@ -138,6 +152,8 @@ pub(crate) fn analyze(
                         &mut counter,
                         learned,
                         analyze_to_clear,
+                        activities,
+                        var_inc,
                     );
                 }
             }
@@ -172,6 +188,7 @@ pub(crate) fn analyze(
     (backjump, lbd)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_lit(
     lit: Lit,
     assignment: &Assignment,
@@ -180,6 +197,8 @@ fn process_lit(
     counter: &mut u32,
     learned: &mut Vec<Lit>,
     to_clear: &mut Vec<Var>,
+    activities: &mut [f64],
+    var_inc: &mut f64,
 ) {
     let v = lit.var();
     let lvl = assignment.level(v);
@@ -188,10 +207,27 @@ fn process_lit(
     }
     seen[v.index()] = true;
     to_clear.push(v);
+    bump_activity(v, activities, var_inc);
     if lvl.get() >= conflict_level.get() {
         *counter += 1;
     } else {
         learned.push(lit);
+    }
+}
+
+/// Bumps `var`'s activity by `*var_inc`. When the bumped activity crosses
+/// `1e100` every activity and `var_inc` itself are divided by `1e100` to
+/// keep the floating-point range bounded.
+fn bump_activity(var: Var, activities: &mut [f64], var_inc: &mut f64) {
+    if var.index() >= activities.len() {
+        return;
+    }
+    activities[var.index()] += *var_inc;
+    if activities[var.index()] > 1e100 {
+        for a in activities.iter_mut() {
+            *a *= 1e-100;
+        }
+        *var_inc *= 1e-100;
     }
 }
 
@@ -368,16 +404,20 @@ mod tests {
         stack: Vec<Var>,
         to_clear: Vec<Var>,
         levels: Vec<DecisionLevel>,
+        activities: Vec<f64>,
+        var_inc: f64,
     }
 
     impl Scratch {
-        fn new() -> Self {
+        fn new(num_vars: usize) -> Self {
             Self {
                 seen: Vec::new(),
                 learned: Vec::new(),
                 stack: Vec::new(),
                 to_clear: Vec::new(),
                 levels: Vec::new(),
+                activities: alloc::vec![0.0; num_vars],
+                var_inc: 1.0,
             }
         }
     }
@@ -396,7 +436,7 @@ mod tests {
         let mut a = prep_assignment(2);
         a.assign(v(1).pos(), Reason::Decision, DecisionLevel::GROUND);
         a.assign(v(2).pos(), Reason::Decision, DecisionLevel::GROUND);
-        let mut s = Scratch::new();
+        let mut s = Scratch::new(2);
         let (bj, lbd) = analyze(
             &arena,
             &a,
@@ -407,6 +447,8 @@ mod tests {
             &mut s.stack,
             &mut s.to_clear,
             &mut s.levels,
+            &mut s.activities,
+            &mut s.var_inc,
         );
         assert_eq!(bj, DecisionLevel::GROUND);
         assert_eq!(lbd, 0);
@@ -423,7 +465,7 @@ mod tests {
         a.assign(v(1).pos(), Reason::Decision, DecisionLevel::new(1));
         a.assign(v(2).pos(), Reason::binary(v(1).neg()), DecisionLevel::new(1));
         a.assign(v(3).pos(), Reason::binary(v(1).neg()), DecisionLevel::new(1));
-        let mut s = Scratch::new();
+        let mut s = Scratch::new(3);
         let (bj, lbd) = analyze(
             &arena,
             &a,
@@ -434,6 +476,8 @@ mod tests {
             &mut s.stack,
             &mut s.to_clear,
             &mut s.levels,
+            &mut s.activities,
+            &mut s.var_inc,
         );
         assert_eq!(s.learned, vec![v(1).neg()]);
         assert_eq!(bj, DecisionLevel::GROUND);
@@ -457,7 +501,7 @@ mod tests {
         a.push_decision_level();
         a.assign(v(2).pos(), Reason::Decision, DecisionLevel::new(2));
         a.assign(v(3).pos(), Reason::binary(v(2).neg()), DecisionLevel::new(2));
-        let mut s = Scratch::new();
+        let mut s = Scratch::new(3);
         let (bj, lbd) = analyze(
             &arena,
             &a,
@@ -468,6 +512,8 @@ mod tests {
             &mut s.stack,
             &mut s.to_clear,
             &mut s.levels,
+            &mut s.activities,
+            &mut s.var_inc,
         );
         assert_eq!(s.learned[0], v(3).neg(), "asserting literal at position 0");
         assert_eq!(s.learned[1], v(1).neg(), "other literal at position 1");
@@ -496,7 +542,7 @@ mod tests {
         // The long clause has x3 at index 0, which matches the propagation
         // contract (propagated literal at position 0).
         a.assign(v(3).pos(), Reason::long(cid), DecisionLevel::new(2));
-        let mut s = Scratch::new();
+        let mut s = Scratch::new(3);
         let (bj, lbd) = analyze(
             &arena,
             &a,
@@ -507,6 +553,8 @@ mod tests {
             &mut s.stack,
             &mut s.to_clear,
             &mut s.levels,
+            &mut s.activities,
+            &mut s.var_inc,
         );
         // Learned must contain asserting literal (neg of UIP) plus whatever
         // lits at lower levels the resolution reached.
@@ -547,7 +595,7 @@ mod tests {
         a.assign(v(2).pos(), Reason::Decision, DecisionLevel::new(2));
         a.assign(v(3).pos(), Reason::binary(v(2).neg()), DecisionLevel::new(2));
         a.assign(v(4).pos(), Reason::long(long_id), DecisionLevel::new(2));
-        let mut s = Scratch::new();
+        let mut s = Scratch::new(4);
         let (bj, _lbd) = analyze(
             &arena,
             &a,
@@ -558,6 +606,8 @@ mod tests {
             &mut s.stack,
             &mut s.to_clear,
             &mut s.levels,
+            &mut s.activities,
+            &mut s.var_inc,
         );
         assert!(!s.learned.is_empty());
         assert!(bj.get() < 2);
@@ -570,7 +620,7 @@ mod tests {
         a.push_decision_level();
         a.assign(v(1).pos(), Reason::Decision, DecisionLevel::new(1));
         a.assign(v(2).pos(), Reason::binary(v(1).neg()), DecisionLevel::new(1));
-        let mut s = Scratch::new();
+        let mut s = Scratch::new(2);
         let _ = analyze(
             &arena,
             &a,
@@ -581,6 +631,8 @@ mod tests {
             &mut s.stack,
             &mut s.to_clear,
             &mut s.levels,
+            &mut s.activities,
+            &mut s.var_inc,
         );
         assert!(s.seen.iter().all(|&b| !b), "seen must be all false after analyze");
         assert!(s.to_clear.is_empty());
