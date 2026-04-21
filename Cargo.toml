@@ -25,6 +25,10 @@ static_assertions = "1.1"
 proptest = "1.5"
 trybuild = "1.0"
 
+[[bench]]
+name = "solver"
+harness = false
+
 [profile.release]
 opt-level     = 3
 lto           = "fat"
