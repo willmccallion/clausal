@@ -6,4 +6,6 @@
 //! in place.
 
 pub(crate) mod analyze;
+pub(crate) mod backtrack;
 pub(crate) mod propagate;
+pub(crate) mod search_loop;
