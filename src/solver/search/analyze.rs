@@ -38,7 +38,7 @@ use crate::types::{DecisionLevel, Lit, Var};
 /// caller.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub(crate) fn analyze(
-    arena: &ClauseArena,
+    arena: &mut ClauseArena,
     assignment: &Assignment,
     conflict: Conflict,
     conflict_level: DecisionLevel,
@@ -79,6 +79,7 @@ pub(crate) fn analyze(
             }
         }
         Conflict::LongClause(id) => {
+            arena.set_used(id);
             for &lit in arena.lits(id) {
                 process_lit(
                     lit,
@@ -142,6 +143,7 @@ pub(crate) fn analyze(
                 );
             }
             Reason::LongClause(id) => {
+                arena.set_used(id);
                 let lits = arena.lits(id);
                 for &lit in &lits[1..] {
                     process_lit(
@@ -432,13 +434,13 @@ mod tests {
 
     #[test]
     fn ground_conflict_yields_empty_clause() {
-        let arena = ClauseArena::new();
+        let mut arena = ClauseArena::new();
         let mut a = prep_assignment(2);
         a.assign(v(1).pos(), Reason::Decision, DecisionLevel::GROUND);
         a.assign(v(2).pos(), Reason::Decision, DecisionLevel::GROUND);
         let mut s = Scratch::new(2);
         let (bj, lbd) = analyze(
-            &arena,
+            &mut arena,
             &a,
             Conflict::Binary([v(1).neg(), v(2).neg()]),
             DecisionLevel::GROUND,
@@ -459,7 +461,7 @@ mod tests {
     fn single_decision_yields_unit_clause() {
         // Decide x1+; propagated lits at the same level via binary reasons;
         // conflict via a binary clause. The UIP is the decision itself.
-        let arena = ClauseArena::new();
+        let mut arena = ClauseArena::new();
         let mut a = prep_assignment(3);
         a.push_decision_level();
         a.assign(v(1).pos(), Reason::Decision, DecisionLevel::new(1));
@@ -467,7 +469,7 @@ mod tests {
         a.assign(v(3).pos(), Reason::binary(v(1).neg()), DecisionLevel::new(1));
         let mut s = Scratch::new(3);
         let (bj, lbd) = analyze(
-            &arena,
+            &mut arena,
             &a,
             Conflict::Binary([v(2).neg(), v(3).neg()]),
             DecisionLevel::new(1),
@@ -494,7 +496,7 @@ mod tests {
         //   seen = {x3, x1}; counter = 1 (x3 at level 2), learned = [x1-]
         //   trail[2] = x3+ (seen): counter -> 0, UIP = x3+.
         // Learned = [!x3, x1-], backjump = 1, LBD = 2.
-        let arena = ClauseArena::new();
+        let mut arena = ClauseArena::new();
         let mut a = prep_assignment(3);
         a.push_decision_level();
         a.assign(v(1).pos(), Reason::Decision, DecisionLevel::new(1));
@@ -503,7 +505,7 @@ mod tests {
         a.assign(v(3).pos(), Reason::binary(v(2).neg()), DecisionLevel::new(2));
         let mut s = Scratch::new(3);
         let (bj, lbd) = analyze(
-            &arena,
+            &mut arena,
             &a,
             Conflict::Binary([v(3).neg(), v(1).neg()]),
             DecisionLevel::new(2),
@@ -544,7 +546,7 @@ mod tests {
         a.assign(v(3).pos(), Reason::long(cid), DecisionLevel::new(2));
         let mut s = Scratch::new(3);
         let (bj, lbd) = analyze(
-            &arena,
+            &mut arena,
             &a,
             Conflict::Binary([v(3).neg(), v(2).pos()]),
             DecisionLevel::new(2),
@@ -597,7 +599,7 @@ mod tests {
         a.assign(v(4).pos(), Reason::long(long_id), DecisionLevel::new(2));
         let mut s = Scratch::new(4);
         let (bj, _lbd) = analyze(
-            &arena,
+            &mut arena,
             &a,
             Conflict::Binary([v(4).neg(), v(1).neg()]),
             DecisionLevel::new(2),
@@ -615,14 +617,14 @@ mod tests {
 
     #[test]
     fn seen_is_cleared_after_analyze() {
-        let arena = ClauseArena::new();
+        let mut arena = ClauseArena::new();
         let mut a = prep_assignment(2);
         a.push_decision_level();
         a.assign(v(1).pos(), Reason::Decision, DecisionLevel::new(1));
         a.assign(v(2).pos(), Reason::binary(v(1).neg()), DecisionLevel::new(1));
         let mut s = Scratch::new(2);
         let _ = analyze(
-            &arena,
+            &mut arena,
             &a,
             Conflict::Binary([v(1).neg(), v(2).neg()]),
             DecisionLevel::new(1),

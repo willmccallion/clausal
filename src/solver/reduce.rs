@@ -27,8 +27,16 @@ const REDUCE_INITIAL: u64 = 2_000;
 const REDUCE_GROW: u64 = 300;
 /// Number of reductions that must run before an arena compaction is scheduled.
 const COMPACT_EVERY: u64 = 4;
-/// LBD at or below this ceiling keeps a learned clause safe from reduction.
-const GLUE_CEILING: u32 = 2;
+/// LBD at or below this ceiling pins the clause in the core tier; core
+/// clauses are never deleted by the reduction pass.
+const CORE_LBD: u32 = 2;
+/// LBD at or below this value places the clause in tier 1; tier 1
+/// clauses are kept at a looser survival rate than tier 2.
+const TIER1_LBD: u32 = 6;
+/// Fraction of tier 1 clauses to drop each reduction pass.
+const TIER1_DROP: f32 = 0.25;
+/// Fraction of tier 2 clauses to drop each reduction pass.
+const TIER2_DROP: f32 = 0.5;
 
 /// Rolling state driving the reduction schedule.
 #[derive(Debug, Clone, Copy)]
@@ -72,11 +80,19 @@ impl Default for ReduceState {
     }
 }
 
-/// Marks the worst half of learned clauses deleted, then sweeps watchers
-/// and the learned-clause list to drop dangling references.
+/// Runs a tier-based reduction pass.
 ///
-/// Clauses currently serving as an assignment's reason are skipped
-/// (locked), as are glue clauses with LBD at or below [`GLUE_CEILING`].
+/// Learned clauses are classified by LBD into three tiers:
+/// * **Core** (LBD at or below [`CORE_LBD`]) — never deleted.
+/// * **Tier 1** (LBD above core, at or below [`TIER1_LBD`]) — keep most;
+///   [`TIER1_DROP`] fraction of the worst is removed.
+/// * **Tier 2** (LBD above [`TIER1_LBD`]) — keep half; [`TIER2_DROP`]
+///   fraction of the worst is removed.
+///
+/// Two further guards: clauses currently serving as a trail reason
+/// (locked) are preserved, and any clause whose `used` flag is set is
+/// preserved regardless of tier. The `used` flag is cleared on every
+/// survivor at the end of the pass.
 pub(crate) fn reduce_learned(
     arena: &mut ClauseArena,
     long_watchers: &mut LongWatchers,
@@ -95,19 +111,53 @@ pub(crate) fn reduce_learned(
         locked_slots.binary_search(&ClauseArena::slot_of(id)).is_ok()
     };
 
-    let mut candidates: Vec<ClauseId> = learned_clauses
-        .iter()
-        .copied()
-        .filter(|&id| {
-            !arena.is_deleted(id) && arena.lbd(id) > GLUE_CEILING && !is_locked(id)
-        })
-        .collect();
+    let mut tier1: Vec<ClauseId> = Vec::new();
+    let mut tier2: Vec<ClauseId> = Vec::new();
+    for &id in learned_clauses.iter() {
+        if arena.is_deleted(id) || is_locked(id) || arena.used(id) {
+            continue;
+        }
+        let lbd = arena.lbd(id);
+        if lbd <= CORE_LBD {
+            continue;
+        }
+        if lbd <= TIER1_LBD {
+            tier1.push(id);
+        } else {
+            tier2.push(id);
+        }
+    }
 
-    candidates.sort_unstable_by_key(|&id| core::cmp::Reverse(arena.lbd(id)));
+    // Highest-LBD clauses drop first within each tier.
+    tier1.sort_unstable_by_key(|&id| core::cmp::Reverse(arena.lbd(id)));
+    tier2.sort_unstable_by_key(|&id| core::cmp::Reverse(arena.lbd(id)));
 
-    let half = candidates.len() / 2;
-    for &id in &candidates[..half] {
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "candidate counts and drop fractions produce a small non-negative usize",
+    )]
+    let tier1_drop = (tier1.len() as f32 * TIER1_DROP) as usize;
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "candidate counts and drop fractions produce a small non-negative usize",
+    )]
+    let tier2_drop = (tier2.len() as f32 * TIER2_DROP) as usize;
+
+    for &id in &tier1[..tier1_drop] {
         arena.mark_deleted(id);
+    }
+    for &id in &tier2[..tier2_drop] {
+        arena.mark_deleted(id);
+    }
+
+    for &id in learned_clauses.iter() {
+        if !arena.is_deleted(id) {
+            arena.clear_used(id);
+        }
     }
 
     for watch_list in long_watchers.iter_mut() {
@@ -221,9 +271,11 @@ mod tests {
     }
 
     #[test]
-    fn reduce_deletes_worst_half_of_non_glue() {
+    fn reduce_drops_worst_in_each_tier() {
         let (mut arena, assignment, mut lw, mut learned) = setup(18);
-        // Six learned long clauses with LBDs 3..=8. None are glue, none locked.
+        // Six learned clauses with LBDs 3..=8. LBDs 3..=6 are tier 1
+        // (four clauses, drop 25% = 1: the LBD-6 one). LBDs 7..=8 are
+        // tier 2 (two clauses, drop 50% = 1: the LBD-8 one).
         for (i, lbd) in (3u32..=8).enumerate() {
             let offset = u32::try_from(i).unwrap() * 3;
             let a = Var::new(offset + 1).unwrap().pos();
@@ -231,19 +283,17 @@ mod tests {
             let c = Var::new(offset + 3).unwrap().neg();
             let _ = push_learned(&mut arena, &mut lw, &mut learned, &[a, b, c], lbd);
         }
-        let before = learned.len();
         reduce_learned(&mut arena, &mut lw, &mut learned, &assignment);
-        assert!(learned.len() < before, "some learned clauses must be dropped");
-        // The worst half (LBDs 6, 7, 8) should be gone; LBDs 3, 4, 5 remain.
-        for id in &learned {
-            assert!(arena.lbd(*id) <= 5);
-        }
+        let mut survivors: alloc::vec::Vec<u32> =
+            learned.iter().map(|&id| arena.lbd(id)).collect();
+        survivors.sort_unstable();
+        assert_eq!(survivors, alloc::vec![3, 4, 5, 7]);
     }
 
     #[test]
-    fn reduce_skips_glue_clauses() {
+    fn reduce_skips_core_tier() {
         let (mut arena, assignment, mut lw, mut learned) = setup(9);
-        // Three glue (LBD=2) and three non-glue (LBD=5).
+        // Three clauses at LBD=2, all in the core tier.
         for i in 0..3u32 {
             let offset = i * 3;
             let a = Var::new(offset + 1).unwrap().pos();
@@ -251,10 +301,31 @@ mod tests {
             let c = Var::new(offset + 3).unwrap().neg();
             let _ = push_learned(&mut arena, &mut lw, &mut learned, &[a, b, c], 2);
         }
-        let glue_count = learned.len();
+        let core_count = learned.len();
         reduce_learned(&mut arena, &mut lw, &mut learned, &assignment);
-        // No non-glue candidates existed, so nothing is deleted.
-        assert_eq!(learned.len(), glue_count);
+        assert_eq!(learned.len(), core_count);
+    }
+
+    #[test]
+    fn reduce_preserves_used_clause() {
+        let (mut arena, assignment, mut lw, mut learned) = setup(9);
+        // Three tier-2 clauses (LBD=8). Without a used flag, half drop.
+        // Flag the worst one as used; it must survive even though its
+        // LBD makes it the first drop candidate.
+        let ids: alloc::vec::Vec<ClauseId> = (0..3u32)
+            .map(|i| {
+                let offset = i * 3;
+                let a = Var::new(offset + 1).unwrap().pos();
+                let b = Var::new(offset + 2).unwrap().pos();
+                let c = Var::new(offset + 3).unwrap().neg();
+                push_learned(&mut arena, &mut lw, &mut learned, &[a, b, c], 8)
+            })
+            .collect();
+        arena.set_used(ids[0]);
+        reduce_learned(&mut arena, &mut lw, &mut learned, &assignment);
+        assert!(learned.contains(&ids[0]));
+        // The used flag is cleared once the pass is over.
+        assert!(!arena.used(ids[0]));
     }
 
     #[test]

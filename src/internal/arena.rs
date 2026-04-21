@@ -24,11 +24,15 @@ use crate::error::{Error, Result};
 use crate::types::{ClauseId, Lit};
 
 const FLAG_DELETED: u32 = 1 << 0;
+/// Set when a learned clause has been consulted since the last reduction.
+/// Reduced clauses protected by this flag bypass deletion in the current
+/// pass; the flag is cleared on every survivor at the end of reduction.
+const FLAG_USED: u32 = 1 << 1;
 /// Shift applied to the learned index before it is stored in
 /// [`ClauseMeta::flags`]. A value of zero in the upper bits means the clause
 /// is not learned; otherwise the stored value is `learned_index + 1` so that
 /// index zero is still representable.
-const LEARNED_IDX_SHIFT: u32 = 1;
+const LEARNED_IDX_SHIFT: u32 = 2;
 
 /// Metadata for a single clause inside [`ClauseArena`].
 #[derive(Debug, Clone, Copy)]
@@ -54,6 +58,13 @@ impl ClauseMeta {
     #[inline]
     pub(crate) const fn is_deleted(self) -> bool {
         self.flags & FLAG_DELETED != 0
+    }
+
+    /// Returns `true` if this clause has been consulted since the last
+    /// reduction pass.
+    #[inline]
+    const fn is_used(self) -> bool {
+        self.flags & FLAG_USED != 0
     }
 
     /// Returns the learned-clause index for this clause, or `None` when the
@@ -199,6 +210,28 @@ impl ClauseArena {
     #[inline]
     pub(crate) fn mark_deleted(&mut self, id: ClauseId) {
         self.meta[Self::slot(id)].flags |= FLAG_DELETED;
+    }
+
+    /// Returns `true` if the clause has been consulted since the last
+    /// reduction pass.
+    #[inline]
+    pub(crate) fn used(&self, id: ClauseId) -> bool {
+        self.meta[Self::slot(id)].is_used()
+    }
+
+    /// Flags the clause as consulted, protecting it from the next
+    /// reduction pass regardless of its tier.
+    #[inline]
+    pub(crate) fn set_used(&mut self, id: ClauseId) {
+        self.meta[Self::slot(id)].flags |= FLAG_USED;
+    }
+
+    /// Clears the used flag. The reduction pass calls this on every
+    /// surviving clause after classification so the next window starts
+    /// from a clean slate.
+    #[inline]
+    pub(crate) fn clear_used(&mut self, id: ClauseId) {
+        self.meta[Self::slot(id)].flags &= !FLAG_USED;
     }
 
     /// Returns the literals of a clause.

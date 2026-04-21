@@ -120,6 +120,7 @@ pub(crate) fn propagate(
                     break 'outer;
                 }
                 Value::Unassigned => {
+                    arena.set_used(w.clause);
                     let lvl = assignment.current_level();
                     assignment.assign(first, Reason::long(w.clause), lvl);
                 }
