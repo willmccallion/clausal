@@ -76,16 +76,18 @@ impl ModeState {
         self.switches
     }
 
-    /// Flips the mode, doubles the budget, and primes the saved phases
-    /// from `best_phases` when entering [`Mode::Stable`].
+    /// Flips the mode, doubles the budget, primes the saved phases from
+    /// `target_phases` when entering [`Mode::Stable`], and resets the
+    /// target window so the next stable entry can pick up new ground.
     pub(crate) fn switch(&mut self, assignment: &mut Assignment, conflicts: u64) {
         self.mode = self.mode.flip();
         self.budget = self.budget.saturating_mul(2);
         self.next_switch = conflicts.saturating_add(self.budget);
         self.switches = self.switches.saturating_add(1);
         if matches!(self.mode, Mode::Stable) {
-            prime_saved_from_best(assignment);
+            prime_saved_from_target(assignment);
         }
+        assignment.reset_target();
     }
 }
 
@@ -95,7 +97,7 @@ impl Default for ModeState {
     }
 }
 
-fn prime_saved_from_best(assignment: &mut Assignment) {
+fn prime_saved_from_target(assignment: &mut Assignment) {
     let num_vars = assignment.num_vars();
     for i in 0..num_vars {
         #[allow(clippy::cast_possible_truncation)]
@@ -103,7 +105,7 @@ fn prime_saved_from_best(assignment: &mut Assignment) {
             continue;
         };
         let Some(var) = Var::new(raw) else { continue };
-        let p = assignment.best_phase(var);
+        let p = assignment.target_phase(var);
         assignment.set_saved_phase(var, p);
     }
 }

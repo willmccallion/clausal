@@ -25,6 +25,12 @@ pub(crate) struct Assignment {
     reasons: Vec<Reason>,
     saved_phases: Vec<bool>,
     best_phases: Vec<bool>,
+    /// Phase snapshot reset on every mode flip. Stable mode primes its
+    /// branching from this array so it heads into the best region seen
+    /// since the most recent switch, independent of the all-time best.
+    target_phases: Vec<bool>,
+    /// Deepest trail length seen since the last `reset_target`.
+    target_trail_len: usize,
 
     lit_values: Vec<Value>,
 
@@ -44,6 +50,8 @@ impl Assignment {
             reasons: Vec::new(),
             saved_phases: Vec::new(),
             best_phases: Vec::new(),
+            target_phases: Vec::new(),
+            target_trail_len: 0,
             lit_values: Vec::new(),
             trail: Vec::new(),
             trail_lim: Vec::new(),
@@ -66,6 +74,7 @@ impl Assignment {
             self.reasons.resize(needed, Reason::Decision);
             self.saved_phases.resize(needed, false);
             self.best_phases.resize(needed, false);
+            self.target_phases.resize(needed, false);
             self.lit_values.resize(needed * 2, Value::Unassigned);
         }
     }
@@ -232,7 +241,8 @@ impl Assignment {
     }
 
     /// Copies the current phase of every assigned variable into
-    /// `best_phases` if the trail is deeper than any previously observed.
+    /// `best_phases` if the trail is deeper than any previously observed,
+    /// and likewise into `target_phases` for the per-mode-cycle window.
     pub(crate) fn update_best_phases_if_deeper(&mut self) {
         if self.trail.len() > self.best_trail_len {
             for lit in &self.trail {
@@ -240,6 +250,27 @@ impl Assignment {
             }
             self.best_trail_len = self.trail.len();
         }
+        if self.trail.len() > self.target_trail_len {
+            for lit in &self.trail {
+                self.target_phases[lit.var().index()] = lit.is_positive();
+            }
+            self.target_trail_len = self.trail.len();
+        }
+    }
+
+    /// Returns the target phase for `var`.
+    #[inline]
+    pub(crate) fn target_phase(&self, var: Var) -> bool {
+        self.target_phases[var.index()]
+    }
+
+    /// Resets the target-phase window. Called on every mode flip so the
+    /// next window tracks the deepest trail seen after the flip.
+    pub(crate) fn reset_target(&mut self) {
+        for slot in &mut self.target_phases {
+            *slot = false;
+        }
+        self.target_trail_len = 0;
     }
 
     /// Returns the deepest trail length seen so far.
