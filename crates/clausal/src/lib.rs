@@ -12,4 +12,4 @@
 //!
 //! [`Error::NotImplemented`]: clausal_core::types
 
-pub use clausal_core::{Clause, ClauseId, DecisionLevel, Lit, Polarity, Value, Var};
+pub use clausal_core::{Clause, ClauseId, Cnf, DecisionLevel, Error, Lit, Polarity, Result, Value, Var};

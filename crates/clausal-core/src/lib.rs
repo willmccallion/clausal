@@ -16,8 +16,12 @@
 
 extern crate alloc;
 
+pub mod cnf;
+pub mod error;
 pub mod types;
 
+pub use cnf::Cnf;
+pub use error::{Error, Result};
 pub use types::{Clause, ClauseId, DecisionLevel, Lit, Polarity, Value, Var};
 
 use static_assertions::{assert_eq_size, assert_impl_all};
